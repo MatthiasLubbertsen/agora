@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/crypto"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
 )
 
 // Provider is one OIDC login provider for the website.

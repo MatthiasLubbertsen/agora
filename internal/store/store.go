@@ -13,7 +13,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/crypto"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
 )
 
 var ErrNotFound = errors.New("not found")

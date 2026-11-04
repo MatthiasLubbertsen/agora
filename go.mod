@@ -1,4 +1,4 @@
-module github.com/matthiaslubbertsen/mcp-full-off-mcps
+module github.com/matthiaslubbertsen/mcp-full-of-mcps
 
 go 1.26.0
 

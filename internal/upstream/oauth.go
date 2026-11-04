@@ -16,8 +16,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"golang.org/x/oauth2"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/crypto"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/store"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
 )
 
 type flow struct {

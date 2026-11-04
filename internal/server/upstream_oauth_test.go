@@ -15,7 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/store"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
 )
 
 // oauthMCP is an MCP server that demands a bearer token and hosts its own
