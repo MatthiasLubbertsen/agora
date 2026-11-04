@@ -58,6 +58,7 @@ export interface Upstream {
   id: string;
   slug: string;
   name: string;
+  label: string;
   url: string;
   transport: "http" | "sse";
   auth_type: "none" | "header" | "oauth";

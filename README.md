@@ -15,6 +15,7 @@ One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mo
 | Name | Meaning |
 | --- | --- |
 | **Gateway** | This app. |
+| **Label** | A short tag you give an upstream (like `Exa` or `rc`). Every tool, prompt and resource from it is shown as `(Exa) Search`, so you can tell where it comes from. Defaults to the short name. |
 | **Upstream** | An MCP server you add to the gateway (the **MCPs** page). The gateway talks to it for you. |
 | **Client** | An app that uses the gateway, like Claude or Cursor. |
 | **Login provider** | The service people use to sign in to the website (Hack Club Auth, Tinyauth, ...). |

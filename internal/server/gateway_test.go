@@ -348,3 +348,31 @@ func TestPublicMCPsAppearInAuthedEndpoint(t *testing.T) {
 		t.Fatalf("scoped token saw %v", got)
 	}
 }
+
+func TestToolsCarryFriendlyLabel(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	up := mockUpstream(t, "batch_edit")
+	withLabel := &store.Upstream{UserID: e.user.ID, Slug: "link-shortener", Name: "Link Shortener", Label: "shortener", URL: up.URL, Transport: "http", AuthType: "none", Enabled: true}
+	noLabel := &store.Upstream{UserID: e.user.ID, Slug: "rc", Name: "Remote Control", URL: up.URL, Transport: "http", AuthType: "none", Enabled: true}
+	for _, u := range []*store.Upstream{withLabel, noLabel} {
+		if err := e.st.CreateUpstream(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tok := "mcpt_" + crypto.RandToken(16)
+	e.st.CreateAPIToken(ctx, &store.APIToken{UserID: e.user.ID, Name: "t", Prefix: tok[:10]}, tok)
+	got := map[string]*mcp.Tool{}
+	for tool, err := range connect(t, e.ts.URL+"/mcp", tok).Tools(ctx, nil) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		got[tool.Name] = tool
+	}
+	if tl := got["link-shortener__batch_edit"]; tl == nil || tl.Title != "(shortener) Batch Edit" || tl.Description != "(shortener) echo" {
+		t.Fatalf("labelled tool = %+v", tl)
+	}
+	if tl := got["rc__batch_edit"]; tl == nil || tl.Title != "(rc) Batch Edit" {
+		t.Fatalf("slug-labelled tool = %+v", tl)
+	}
+}
