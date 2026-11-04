@@ -213,6 +213,31 @@ type upstreamSnap struct {
 	snap *upstream.Snapshot
 }
 
+// humanize turns "batch_edit" into "Batch Edit" for tools that have no title.
+func humanize(name string) string {
+	words := strings.FieldsFunc(name, func(r rune) bool { return r == '_' || r == '-' || r == '.' || r == ' ' })
+	for i, w := range words {
+		words[i] = strings.ToUpper(w[:1]) + w[1:]
+	}
+	return strings.Join(words, " ")
+}
+
+// titled puts the upstream's label after a title, so "List" becomes "List (Exa)".
+func titled(label, title string) string {
+	if title == "" {
+		return "(" + label + ")"
+	}
+	return title + " (" + label + ")"
+}
+
+// tagged puts the label in front of a description, so the model sees where a tool comes from.
+func tagged(label, text string) string {
+	if text == "" {
+		return "(" + label + ")"
+	}
+	return "(" + label + ") " + text
+}
+
 func gwName(slug, name string) string {
 	n := slug + "__" + name
 	if len(n) > 64 {
@@ -223,6 +248,7 @@ func gwName(slug, name string) string {
 
 func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, used map[string]bool) {
 	up := us.up
+	label := up.DisplayLabel()
 	for _, t := range us.snap.Tools {
 		t := t
 		name := gwName(slug, t.Name)
@@ -230,7 +256,11 @@ func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, use
 			continue
 		}
 		used[name] = true
-		tool := &mcp.Tool{Name: name, Title: t.Title, Description: t.Description, Annotations: t.Annotations,
+		title := t.Title
+		if title == "" {
+			title = humanize(t.Name)
+		}
+		tool := &mcp.Tool{Name: name, Title: titled(label, title), Description: tagged(label, t.Description), Annotations: t.Annotations,
 			InputSchema: objectSchema(t.InputSchema), OutputSchema: t.OutputSchema}
 		func() {
 			defer func() { _ = recover() }() // a malformed upstream schema must not break the whole server
@@ -259,7 +289,11 @@ func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, use
 			continue
 		}
 		used["prompt:"+name] = true
-		srv.AddPrompt(&mcp.Prompt{Name: name, Title: pr.Title, Description: pr.Description, Arguments: pr.Arguments},
+		ptitle := pr.Title
+		if ptitle == "" {
+			ptitle = humanize(pr.Name)
+		}
+		srv.AddPrompt(&mcp.Prompt{Name: name, Title: titled(label, ptitle), Description: tagged(label, pr.Description), Arguments: pr.Arguments},
 			func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 				var res *mcp.GetPromptResult
 				err := s.up.With(ctx, up, func(cs *mcp.ClientSession) error {
@@ -277,7 +311,7 @@ func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, use
 			continue
 		}
 		used[gw] = true
-		srv.AddResource(&mcp.Resource{URI: gw, Name: slug + ": " + rs.Name, Title: rs.Title, Description: rs.Description,
+		srv.AddResource(&mcp.Resource{URI: gw, Name: label + ": " + rs.Name, Title: rs.Title, Description: rs.Description,
 			MIMEType: rs.MIMEType, Size: rs.Size, Annotations: rs.Annotations},
 			func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 				var res *mcp.ReadResourceResult

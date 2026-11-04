@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS upstreams (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   slug TEXT NOT NULL,
   name TEXT NOT NULL,
+  label TEXT NOT NULL DEFAULT '',
   url TEXT NOT NULL,
   transport TEXT NOT NULL DEFAULT 'http',
   auth_type TEXT NOT NULL DEFAULT 'none',
@@ -124,8 +125,20 @@ CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user ON oauth_tokens(user_id);
 `
 
 func (s *Store) migrate() error {
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	// Databases created before the label column existed.
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('upstreams') WHERE name='label'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE upstreams ADD COLUMN label TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func ts(t time.Time) int64 { return t.Unix() }
@@ -308,6 +321,7 @@ type Upstream struct {
 	UserID     string    `json:"user_id"`
 	Slug       string    `json:"slug"`
 	Name       string    `json:"name"`
+	Label      string    `json:"label"` // short tag shown next to each tool; empty means use Slug
 	URL        string    `json:"url"`
 	Transport  string    `json:"transport"` // http | sse
 	AuthType   string    `json:"auth_type"` // none | header | oauth
@@ -316,6 +330,14 @@ type Upstream struct {
 	IsPublic   bool      `json:"is_public"`
 	Enabled    bool      `json:"enabled"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+// DisplayLabel is the short tag shown next to this upstream's tools.
+func (u *Upstream) DisplayLabel() string {
+	if u.Label != "" {
+		return u.Label
+	}
+	return u.Slug
 }
 
 type UpstreamOAuth struct {
@@ -329,14 +351,14 @@ type UpstreamOAuth struct {
 	Token        string // JSON-encoded oauth2.Token, empty until connected
 }
 
-const upCols = `id,user_id,slug,name,url,transport,auth_type,header_name,secret,is_public,enabled,created_at`
+const upCols = `id,user_id,slug,name,label,url,transport,auth_type,header_name,secret,is_public,enabled,created_at`
 
 func (s *Store) scanUpstream(r interface{ Scan(...any) error }) (*Upstream, error) {
 	var u Upstream
 	var pub, en int
 	var c int64
 	var sec string
-	if err := r.Scan(&u.ID, &u.UserID, &u.Slug, &u.Name, &u.URL, &u.Transport, &u.AuthType, &u.HeaderName, &sec, &pub, &en, &c); err != nil {
+	if err := r.Scan(&u.ID, &u.UserID, &u.Slug, &u.Name, &u.Label, &u.URL, &u.Transport, &u.AuthType, &u.HeaderName, &sec, &pub, &en, &c); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -353,8 +375,8 @@ func (s *Store) scanUpstream(r interface{ Scan(...any) error }) (*Upstream, erro
 func (s *Store) CreateUpstream(ctx context.Context, u *Upstream) error {
 	u.ID = crypto.RandHex(12)
 	u.CreatedAt = time.Now()
-	_, err := s.db.ExecContext(ctx, `INSERT INTO upstreams(`+upCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-		u.ID, u.UserID, u.Slug, u.Name, u.URL, u.Transport, u.AuthType, u.HeaderName, s.box.Seal(u.Secret),
+	_, err := s.db.ExecContext(ctx, `INSERT INTO upstreams(`+upCols+`) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		u.ID, u.UserID, u.Slug, u.Name, u.Label, u.URL, u.Transport, u.AuthType, u.HeaderName, s.box.Seal(u.Secret),
 		b2i(u.IsPublic), b2i(u.Enabled), ts(u.CreatedAt))
 	if isUnique(err) {
 		return ErrConflict
@@ -363,9 +385,9 @@ func (s *Store) CreateUpstream(ctx context.Context, u *Upstream) error {
 }
 
 func (s *Store) UpdateUpstream(ctx context.Context, u *Upstream) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE upstreams SET slug=?,name=?,url=?,transport=?,auth_type=?,header_name=?,secret=?,is_public=?,enabled=?
+	res, err := s.db.ExecContext(ctx, `UPDATE upstreams SET slug=?,name=?,label=?,url=?,transport=?,auth_type=?,header_name=?,secret=?,is_public=?,enabled=?
 		WHERE id=? AND user_id=?`,
-		u.Slug, u.Name, u.URL, u.Transport, u.AuthType, u.HeaderName, s.box.Seal(u.Secret), b2i(u.IsPublic), b2i(u.Enabled), u.ID, u.UserID)
+		u.Slug, u.Name, u.Label, u.URL, u.Transport, u.AuthType, u.HeaderName, s.box.Seal(u.Secret), b2i(u.IsPublic), b2i(u.Enabled), u.ID, u.UserID)
 	if isUnique(err) {
 		return ErrConflict
 	}

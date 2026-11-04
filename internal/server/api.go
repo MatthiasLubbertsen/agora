@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
 	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
@@ -53,6 +54,7 @@ func (s *Server) handleUpstreamList(w http.ResponseWriter, r *http.Request) {
 type upstreamInput struct {
 	Name       *string `json:"name"`
 	Slug       *string `json:"slug"`
+	Label      *string `json:"label"`
 	URL        *string `json:"url"`
 	Transport  *string `json:"transport"`
 	AuthType   *string `json:"auth_type"`
@@ -89,6 +91,9 @@ func apply(u *store.Upstream, in *upstreamInput) string {
 	if in.Slug != nil {
 		u.Slug = strings.TrimSpace(strings.ToLower(*in.Slug))
 	}
+	if in.Label != nil {
+		u.Label = strings.TrimSpace(*in.Label)
+	}
 	if in.URL != nil {
 		u.URL = strings.TrimSpace(*in.URL)
 	}
@@ -118,6 +123,9 @@ func apply(u *store.Upstream, in *upstreamInput) string {
 	}
 	if !slugRe.MatchString(u.Slug) {
 		return "The short name can only use a-z, 0-9 and dashes (max 32). It becomes the tool prefix, e.g. " + u.Slug + "__search."
+	}
+	if utf8.RuneCountInString(u.Label) > 16 || strings.ContainsAny(u.Label, "\r\n\t") {
+		return "The label can be up to 16 characters, like Exa or rc."
 	}
 	pu, err := url.Parse(u.URL)
 	if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" {

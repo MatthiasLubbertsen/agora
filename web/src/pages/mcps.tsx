@@ -202,6 +202,7 @@ function Row(p: {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{u.name}</h3>
             <code className="rounded bg-accent px-1.5 py-0.5 text-xs text-muted-foreground">{u.slug}__</code>
+            <Badge variant="outline">({u.label || u.slug})</Badge>
             <Badge variant="outline">{u.transport === "sse" ? "SSE" : "HTTP"}</Badge>
             <Badge variant="outline">{authLabel}</Badge>
             {u.is_public && <Badge variant="warning"><Globe className="size-3" /> Public</Badge>}
@@ -236,6 +237,7 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
   const [name, setName] = useState(initial?.name ?? "");
   const [slug, setSlug] = useState(initial?.slug ?? "");
   const [slugTouched, setSlugTouched] = useState(!!initial);
+  const [label, setLabel] = useState(initial?.label ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
   const [transport, setTransport] = useState(initial?.transport ?? "http");
   const [authType, setAuthType] = useState(initial?.auth_type ?? "none");
@@ -249,7 +251,7 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
     e.preventDefault();
     setBusy(true);
     setError("");
-    const body = { name, slug: slug || slugify(name), url, transport, auth_type: authType, header_name: headerName, secret, is_public: isPublic };
+    const body = { name, label, slug: slug || slugify(name), url, transport, auth_type: authType, header_name: headerName, secret, is_public: isPublic };
     try {
       const saved = initial
         ? await api<Upstream>(`/api/upstreams/${initial.id}`, { method: "PATCH", body })
@@ -281,13 +283,16 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
               <Input value={slug} maxLength={32} pattern="[a-z0-9][a-z0-9\-]*" placeholder={slugify(name) || "notion"}
                 onChange={(e) => { setSlug(e.target.value.toLowerCase()); setSlugTouched(true); }} />
             </Field>
-            <Field label="Transport">
-              <NativeSelect value={transport} onChange={(e) => setTransport(e.target.value as "http" | "sse")}>
-                <option value="http">Streamable HTTP</option>
-                <option value="sse">SSE (legacy)</option>
-              </NativeSelect>
+            <Field label="Label" hint={<>Shown after each tool name, like <code>Search ({label || slug || "Exa"})</code></>}>
+              <Input value={label} maxLength={16} placeholder={slug || "Exa"} onChange={(e) => setLabel(e.target.value)} />
             </Field>
           </div>
+          <Field label="Transport">
+            <NativeSelect value={transport} onChange={(e) => setTransport(e.target.value as "http" | "sse")}>
+              <option value="http">Streamable HTTP</option>
+              <option value="sse">SSE (legacy)</option>
+            </NativeSelect>
+          </Field>
           <Field label="Authentication">
             <NativeSelect value={authType} onChange={(e) => setAuthType(e.target.value as Upstream["auth_type"])}>
               <option value="none">None</option>
