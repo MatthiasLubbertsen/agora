@@ -1,0 +1,29 @@
+# Example: the gateway behind Caddy, which handles HTTPS automatically.
+# Copy .env.example to .env, fill it in, then: docker compose up -d
+services:
+  gateway:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TRUST_PROXY: "true"
+    volumes:
+      - gateway-data:/data
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    command: caddy reverse-proxy --from ${DOMAIN} --to gateway:8080
+    volumes:
+      - caddy-data:/data
+    depends_on:
+      - gateway
+
+volumes:
+  gateway-data:
+  caddy-data:
