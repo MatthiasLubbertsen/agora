@@ -222,7 +222,15 @@ func humanize(name string) string {
 	return strings.Join(words, " ")
 }
 
-// tagged puts the upstream's label in front, so "List" becomes "(Exa) List".
+// titled puts the upstream's label after a title, so "List" becomes "List (Exa)".
+func titled(label, title string) string {
+	if title == "" {
+		return "(" + label + ")"
+	}
+	return title + " (" + label + ")"
+}
+
+// tagged puts the label in front of a description, so the model sees where a tool comes from.
 func tagged(label, text string) string {
 	if text == "" {
 		return "(" + label + ")"
@@ -252,7 +260,7 @@ func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, use
 		if title == "" {
 			title = humanize(t.Name)
 		}
-		tool := &mcp.Tool{Name: name, Title: tagged(label, title), Description: tagged(label, t.Description), Annotations: t.Annotations,
+		tool := &mcp.Tool{Name: name, Title: titled(label, title), Description: tagged(label, t.Description), Annotations: t.Annotations,
 			InputSchema: objectSchema(t.InputSchema), OutputSchema: t.OutputSchema}
 		func() {
 			defer func() { _ = recover() }() // a malformed upstream schema must not break the whole server
@@ -285,7 +293,7 @@ func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, use
 		if ptitle == "" {
 			ptitle = humanize(pr.Name)
 		}
-		srv.AddPrompt(&mcp.Prompt{Name: name, Title: tagged(label, ptitle), Description: tagged(label, pr.Description), Arguments: pr.Arguments},
+		srv.AddPrompt(&mcp.Prompt{Name: name, Title: titled(label, ptitle), Description: tagged(label, pr.Description), Arguments: pr.Arguments},
 			func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 				var res *mcp.GetPromptResult
 				err := s.up.With(ctx, up, func(cs *mcp.ClientSession) error {

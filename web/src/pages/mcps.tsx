@@ -283,7 +283,7 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
               <Input value={slug} maxLength={32} pattern="[a-z0-9][a-z0-9\-]*" placeholder={slugify(name) || "notion"}
                 onChange={(e) => { setSlug(e.target.value.toLowerCase()); setSlugTouched(true); }} />
             </Field>
-            <Field label="Label" hint={<>Shown in front of each tool, like <code>({label || slug || "Exa"}) Search</code></>}>
+            <Field label="Label" hint={<>Shown after each tool name, like <code>Search ({label || slug || "Exa"})</code></>}>
               <Input value={label} maxLength={16} placeholder={slug || "Exa"} onChange={(e) => setLabel(e.target.value)} />
             </Field>
           </div>

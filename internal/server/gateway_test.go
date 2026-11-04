@@ -369,10 +369,10 @@ func TestToolsCarryFriendlyLabel(t *testing.T) {
 		}
 		got[tool.Name] = tool
 	}
-	if tl := got["link-shortener__batch_edit"]; tl == nil || tl.Title != "(shortener) Batch Edit" || tl.Description != "(shortener) echo" {
+	if tl := got["link-shortener__batch_edit"]; tl == nil || tl.Title != "Batch Edit (shortener)" || tl.Description != "(shortener) echo" {
 		t.Fatalf("labelled tool = %+v", tl)
 	}
-	if tl := got["rc__batch_edit"]; tl == nil || tl.Title != "(rc) Batch Edit" {
+	if tl := got["rc__batch_edit"]; tl == nil || tl.Title != "Batch Edit (rc)" {
 		t.Fatalf("slug-labelled tool = %+v", tl)
 	}
 }
