@@ -194,7 +194,7 @@ function Row(p: {
   onToggle: (f: Partial<Pick<Upstream, "enabled" | "is_public">>) => void;
 }) {
   const { u } = p;
-  const authLabel = u.auth_type === "oauth" ? "OAuth" : u.auth_type === "header" ? "API key" : "No auth";
+  const authLabel = u.auth_type === "oauth" ? "OAuth" : u.auth_type === "header" ? "Bearer token" : "No auth";
   return (
     <Card className={cn("p-4", !u.enabled && "opacity-70")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -291,16 +291,16 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
           <Field label="Authentication">
             <NativeSelect value={authType} onChange={(e) => setAuthType(e.target.value as Upstream["auth_type"])}>
               <option value="none">None</option>
-              <option value="header">API key / bearer token</option>
+              <option value="header">Bearer token (your own)</option>
               <option value="oauth">OAuth (log in to it)</option>
             </NativeSelect>
           </Field>
           {authType === "header" && (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Header" hint="Leave empty for Authorization">
+              <Field label="Header name" hint="Leave empty for Authorization">
                 <Input value={headerName} placeholder="Authorization" onChange={(e) => setHeaderName(e.target.value)} />
               </Field>
-              <Field label="Value" hint={initial?.has_secret ? "Leave empty to keep the saved one" : "Sent as Bearer … for Authorization"}>
+              <Field label="Your token" hint={initial?.has_secret ? "Leave empty to keep the saved one. Only you can use it." : "Sent as “Authorization: Bearer …” on every request. Stored encrypted, only you can use it."}>
                 <Input type="password" autoComplete="off" value={secret} required={!initial?.has_secret} onChange={(e) => setSecret(e.target.value)} />
               </Field>
             </div>
