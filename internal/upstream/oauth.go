@@ -16,8 +16,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"golang.org/x/oauth2"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/crypto"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/store"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
 )
 
 type flow struct {
@@ -88,7 +88,7 @@ func (m *Manager) discoverResource(ctx context.Context, mcpURL string) (*oauthex
 	var candidates []string
 
 	probe, _ := http.NewRequestWithContext(ctx, http.MethodPost, mcpURL,
-		bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mcp-full-off-mcps","version":"1"}}}`)))
+		bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"mofm","version":"1"}}}`)))
 	probe.Header.Set("Content-Type", "application/json")
 	probe.Header.Set("Accept", "application/json, text/event-stream")
 	if resp, err := m.httpc.Do(probe); err == nil {
@@ -177,7 +177,7 @@ func (m *Manager) StartOAuth(ctx context.Context, up *store.Upstream, redirectUR
 			TokenEndpointAuthMethod: "none",
 			GrantTypes:              []string{"authorization_code", "refresh_token"},
 			ResponseTypes:           []string{"code"},
-			ClientName:              "MCP Full Off MCPs",
+			ClientName:              "MCP Full Of MCPs",
 			ApplicationType:         "web",
 		}, m.httpc)
 		if err != nil {

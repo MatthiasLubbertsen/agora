@@ -16,9 +16,9 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/config"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/crypto"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/store"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/config"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
 )
 
 type echoIn struct {
@@ -314,5 +314,37 @@ func TestSignInRules(t *testing.T) {
 	e.st.UpdateUser(ctx, u.ID, nil, nil, &d)
 	if _, err := e.srv.resolveUser(ctx, "stranger@example.com", "S", ""); err == nil {
 		t.Fatal("disabled user admitted")
+	}
+}
+
+func TestPublicMCPsAppearInAuthedEndpoint(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	other, _ := e.st.CreateUser(ctx, "other@example.com", "", false)
+	up := mockUpstream(t, "echo")
+	mine := e.addUpstream(t, "exa", up.URL, false)
+	// Another user shares one MCP publicly and keeps one private. Their public
+	// one has the same short name as mine, so it must get a suffix, not shadow mine.
+	pub := &store.Upstream{UserID: other.ID, Slug: "exa", Name: "exa", URL: up.URL, Transport: "http", AuthType: "none", Enabled: true, IsPublic: true}
+	priv := &store.Upstream{UserID: other.ID, Slug: "secret", Name: "secret", URL: up.URL, Transport: "http", AuthType: "none", Enabled: true}
+	for _, u := range []*store.Upstream{pub, priv} {
+		if err := e.st.CreateUpstream(ctx, u); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tok := "mcpt_" + crypto.RandToken(16)
+	e.st.CreateAPIToken(ctx, &store.APIToken{UserID: e.user.ID, Name: "t", Prefix: tok[:10]}, tok)
+	names := strings.Join(toolNames(t, connect(t, e.ts.URL+"/mcp", tok)), ",")
+	if !strings.Contains(names, "exa__echo") || !strings.Contains(names, "exa-"+pub.ID[:4]+"__echo") {
+		t.Fatalf("expected own and suffixed public tool, got %s", names)
+	}
+	if strings.Contains(names, "secret__") {
+		t.Fatalf("another user's private MCP leaked: %s", names)
+	}
+	// A token limited to one MCP gets no public extras.
+	scoped := "mcpt_" + crypto.RandToken(16)
+	e.st.CreateAPIToken(ctx, &store.APIToken{UserID: e.user.ID, Name: "s", Prefix: scoped[:10], UpstreamIDs: []string{mine.ID}}, scoped)
+	if got := toolNames(t, connect(t, e.ts.URL+"/mcp", scoped)); len(got) != 1 {
+		t.Fatalf("scoped token saw %v", got)
 	}
 }

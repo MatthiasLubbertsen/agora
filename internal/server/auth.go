@@ -15,9 +15,9 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/config"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/crypto"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/store"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/config"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
 )
 
 const sessionTTL = 30 * 24 * time.Hour

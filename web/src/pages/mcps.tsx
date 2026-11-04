@@ -226,7 +226,7 @@ function Row(p: {
       </div>
       <label className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <Switch checked={u.is_public} onCheckedChange={(v) => p.onToggle({ is_public: v })} className="scale-90" />
-        Public: reachable without signing in via the public endpoint (only if an admin enables it)
+        Public: every signed-in user gets this MCP in their /mcp, and anyone can use it on the public endpoint if an admin enables that
       </label>
     </Card>
   );
@@ -314,7 +314,7 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
             <Checkbox id="public" checked={isPublic} onCheckedChange={(v) => setIsPublic(v === true)} className="mt-0.5" />
             <div>
               <Label htmlFor="public">Make public</Label>
-              <p className="text-xs text-muted-foreground">Anyone can use this MCP through the public endpoint, with your credentials for it. Off by default.</p>
+              <p className="text-xs text-muted-foreground">Every user of this gateway gets it in their own /mcp, and anyone if the public endpoint is on. They use your stored credentials for it, so use this for MCPs that need no auth (like Exa) or that you want to share. Off by default.</p>
             </div>
           </div>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

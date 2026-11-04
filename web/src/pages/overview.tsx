@@ -99,7 +99,7 @@ export function Overview() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Your gateway URL</CardTitle>
-          <CardDescription>Give this to any MCP client. It sees only your MCPs, based on how it signs in.</CardDescription>
+          <CardDescription>Give this to any MCP client. It sees your MCPs plus any MCP marked Public.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-5">
           <div className="flex items-center gap-2">

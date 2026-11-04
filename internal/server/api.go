@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/crypto"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/store"
-	"github.com/matthiaslubbertsen/mcp-full-off-mcps/internal/upstream"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/crypto"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/upstream"
 )
 
 var slugRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,31}$`)

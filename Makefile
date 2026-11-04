@@ -19,4 +19,4 @@ run: build
 	./bin/gateway
 
 docker:
-	docker build -t mcp-full-off-mcps .
+	docker build -t mofm .
