@@ -8,7 +8,7 @@ One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mo
 - **Multi-user.** Every user owns their own private MCPs, tokens and logins. Nobody sees anyone else's.
 - **Three ways in** for MCP clients: OAuth, bearer token, or no auth (opt-in, public MCPs only).
 - **Website login via OIDC** (Hack Club Auth, Tinyauth, or any OIDC provider you configure).
-- **Upstreams** can be Streamable HTTP or legacy SSE, with no auth, a bearer token (yours, stored encrypted), or their own OAuth (the gateway logs in, stores and refreshes the tokens).
+- **Upstreams** can be Streamable HTTP or legacy SSE, with no auth, an API key/bearer header, or their own OAuth (the gateway logs in, stores and refreshes the tokens).
 
 ## Words used in this project
 
