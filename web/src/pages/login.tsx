@@ -28,7 +28,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3">
           <Logo className="size-9" />
-          <h1 className="text-xl font-semibold tracking-tight">MCP Gateway</h1>
+          <h1 className="text-xl font-semibold tracking-tight">mcp-full-off-mcps</h1>
         </div>
         {children}
       </div>

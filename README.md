@@ -1,4 +1,6 @@
-# MCP Gateway
+# mcp-full-off-mcps
+
+The gateway that is full of MCPs.
 
 One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mode web UI; every client (Claude, Cursor, VS Code, …) connects to a single URL and sees all your tools, namespaced as `slug__tool`.
 
@@ -35,6 +37,8 @@ On first start the log prints a one-time setup link, `…/setup?token=…`. Open
 1. **Users** → add people by email (or turn on open sign-up under **Settings**). They sign in with your provider and are matched by email.
 2. **MCPs** → **Add MCP**, paste the server URL, choose how to authenticate (none / API key / OAuth). For OAuth press **Connect** to log in to that MCP.
 3. **Overview** → copy the gateway URL, or the one-line install command for your client.
+
+Images are built by GitHub Actions on every push to `main` and every `v*` tag, and published to `ghcr.io/<owner>/mcp-full-off-mcps` (`edge`, version and short-sha tags; amd64 and arm64). To use one instead of building locally, replace `build: .` in `docker-compose.yml` with `image: ghcr.io/<owner>/mcp-full-off-mcps:edge`. The package is private until you make it public in the repo's Packages settings.
 
 Without Docker:
 
