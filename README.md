@@ -1,6 +1,6 @@
-# MCP Full Off MCPs
+# MCP Full Of MCPs
 
-The gateway that is full of MCPs.
+The gateway that is full of MCPs. Short name: **mofm**.
 
 One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mode web UI; every client (Claude, Cursor, VS Code, …) connects to a single URL and sees all your tools, namespaced as `slug__tool`.
 
@@ -26,9 +26,9 @@ One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mo
 
 | Client sends | Endpoint | Sees |
 | --- | --- | --- |
-| OAuth access token (client did the browser login) | `/mcp` | all of that user's MCPs |
-| Bearer token `mcpt_…` created in the UI | `/mcp` | all of that user's MCPs, or only the ones the token is limited to |
-| Nothing | `/mcp/public` | only MCPs their owner marked **Public**, and only if an admin turned the public endpoint on |
+| OAuth access token (client did the browser login) | `/mcp` | all of that user's MCPs, plus every MCP anyone marked **Public** |
+| Bearer token `mcpt_…` created in the UI | `/mcp` | the same, or only the MCPs the token is limited to (a limited token gets no extra public ones) |
+| Nothing | `/mcp/public` | only the **Public** MCPs, and only if an admin turned the public endpoint on |
 
 `/mcp` always requires credentials, which is what makes OAuth login prompts work in clients like Claude. The no-auth endpoint is a separate URL for that reason. It is off by default.
 
@@ -81,7 +81,7 @@ Admin-only switches live in the UI under **Settings**: *open sign-up* (off by de
 
 - **Upstream URLs are user-supplied**, so by default the gateway refuses to connect to loopback, private, link-local and CGNAT addresses (checked at dial time, so DNS rebinding doesn't bypass it). If your MCPs live on a private network, set `ALLOW_PRIVATE_UPSTREAMS=true`, ideally only on an instance where every user is trusted. Outbound HTTP proxies (`HTTPS_PROXY`) are not used for upstream traffic.
 - Stored upstream secrets and OAuth tokens are encrypted at rest. Bearer tokens, OAuth access/refresh tokens, authorization codes and website sessions are stored only as SHA-256 hashes.
-- A **Public** MCP is callable by anyone who can reach `/mcp/public`, using the owner's stored credentials for it. Only mark MCPs public if that's what you want.
+- A **Public** MCP appears in every signed-in user's `/mcp`, and is callable by anyone who can reach `/mcp/public` if that is on. Everyone uses the owner's stored credentials for it, which suits MCPs that need no auth (like Exa). If two MCPs share a short name, the user's own keeps it and the other gets a stable suffix such as `exa-3f9a`. Only mark MCPs public if that's what you want.
 - Disabling a user immediately invalidates their website sessions and OAuth tokens, and their bearer tokens stop working.
 - Website sign-in requires an email from the provider, and `email_verified` must not be `false`. Make sure your provider verifies emails before turning on open sign-up.
 - Website cookies are `HttpOnly`, `SameSite=Lax`, and state-changing API calls reject cross-origin requests.

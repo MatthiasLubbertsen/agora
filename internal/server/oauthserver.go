@@ -38,7 +38,7 @@ func (s *Server) mountOAuthServer(mux *http.ServeMux) {
 		"authorization_servers":    []string{s.cfg.BaseURL},
 		"bearer_methods_supported": []string{"header"},
 		"scopes_supported":         []string{"mcp"},
-		"resource_name":            "MCP Full Off MCPs",
+		"resource_name":            "MCP Full Of MCPs",
 	}
 	asm := map[string]any{
 		"issuer":                                s.cfg.BaseURL,

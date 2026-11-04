@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -109,30 +110,31 @@ func (s *Server) authenticateBearer(w http.ResponseWriter, r *http.Request) (*pr
 	return nil, false
 }
 
-// principalUpstreams lists the upstreams a caller may see.
+// principalUpstreams lists the upstreams a caller may see: their own, plus
+// every enabled upstream that any user marked Public. A token limited to
+// specific MCPs sees exactly those and nothing else.
 func (s *Server) principalUpstreams(ctx context.Context, p *principal) []*store.Upstream {
-	var ups []*store.Upstream
 	if p.user == nil {
-		ups, _ = s.st.ListPublicUpstreams(ctx)
-	} else {
-		all, _ := s.st.ListUpstreams(ctx, p.user.ID)
-		for _, u := range all {
-			if !u.Enabled {
-				continue
+		ups, _ := s.st.ListPublicUpstreams(ctx)
+		return ups
+	}
+	var ups []*store.Upstream
+	all, _ := s.st.ListUpstreams(ctx, p.user.ID)
+	for _, u := range all {
+		if !u.Enabled {
+			continue
+		}
+		if p.scope != nil && !slices.Contains(p.scope, u.ID) {
+			continue
+		}
+		ups = append(ups, u)
+	}
+	if p.scope == nil {
+		pub, _ := s.st.ListPublicUpstreams(ctx)
+		for _, u := range pub {
+			if u.UserID != p.user.ID {
+				ups = append(ups, u)
 			}
-			if p.scope != nil {
-				ok := false
-				for _, id := range p.scope {
-					if id == u.ID {
-						ok = true
-						break
-					}
-				}
-				if !ok {
-					continue
-				}
-			}
-			ups = append(ups, u)
 		}
 	}
 	return ups
@@ -161,7 +163,7 @@ func errResult(msg string) *mcp.CallToolResult {
 // buildServer assembles an MCP server exposing every tool, prompt and resource
 // of the caller's upstreams, each prefixed with the upstream's short name.
 func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "mcp-full-off-mcps", Version: "1.0.0"}, &mcp.ServerOptions{
+	srv := mcp.NewServer(&mcp.Implementation{Name: "mofm", Version: "1.0.0"}, &mcp.ServerOptions{
 		Instructions: "This server merges several MCP servers. Every tool and prompt name starts with the name of the MCP it comes from, followed by two underscores.",
 		// What a caller sees depends on who they are, so no shared cache may keep it.
 		SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs, c.CacheScope = 0, "private" },
@@ -190,17 +192,17 @@ func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
 	}
 	wg.Wait()
 
-	usedSlug := map[string]int{}
+	usedSlug := map[string]bool{}
 	usedName := map[string]bool{}
 	for _, us := range snaps {
 		if us == nil {
 			continue
 		}
 		slug := us.up.Slug
-		if n := usedSlug[slug]; n > 0 { // only possible on the public endpoint
-			slug = fmt.Sprintf("%s-%d", slug, n+1)
+		if usedSlug[slug] { // someone else's public MCP with the same short name: stable suffix
+			slug = slug + "-" + us.up.ID[:4]
 		}
-		usedSlug[us.up.Slug]++
+		usedSlug[slug] = true
 		s.addUpstream(srv, slug, us, usedName)
 	}
 	return srv

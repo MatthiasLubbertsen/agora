@@ -26,7 +26,7 @@ export function Layout() {
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4">
           <NavLink to="/" className="flex items-center gap-2 font-semibold">
             <Logo />
-            <span className="hidden sm:inline">MCP Full Off MCPs</span>
+            <span className="hidden sm:inline">MCP Full Of MCPs</span>
           </NavLink>
           <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
             {items.map((i) => (

@@ -210,7 +210,7 @@ func (m *Manager) connect(ctx context.Context, up *store.Upstream, e *entry) (*m
 	default:
 		tr = &mcp.StreamableClientTransport{Endpoint: up.URL, HTTPClient: hc, MaxRetries: 2, DisableStandaloneSSE: true}
 	}
-	cl := mcp.NewClient(&mcp.Implementation{Name: "mcp-full-off-mcps", Version: "1.0.0"}, nil)
+	cl := mcp.NewClient(&mcp.Implementation{Name: "mofm", Version: "1.0.0"}, nil)
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	return cl.Connect(cctx, tr, nil)
