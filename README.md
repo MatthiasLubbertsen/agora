@@ -1,4 +1,4 @@
-# mcp-full-off-mcps
+# MCP Full Off MCPs
 
 The gateway that is full of MCPs.
 
@@ -9,6 +9,18 @@ One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mo
 - **Three ways in** for MCP clients: OAuth, bearer token, or no auth (opt-in, public MCPs only).
 - **Website login via OIDC** (Hack Club Auth, Tinyauth, or any OIDC provider you configure).
 - **Upstreams** can be Streamable HTTP or legacy SSE, with no auth, an API key/bearer header, or their own OAuth (the gateway logs in, stores and refreshes the tokens).
+
+## Words used in this project
+
+| Name | Meaning |
+| --- | --- |
+| **Gateway** | This app. |
+| **Upstream** | An MCP server you add to the gateway (the **MCPs** page). The gateway talks to it for you. |
+| **Client** | An app that uses the gateway, like Claude or Cursor. |
+| **Login provider** | The service people use to sign in to the website (Hack Club Auth, Tinyauth, ...). |
+| **Callback URL** | The address on the gateway that a login provider sends people back to after they sign in: `BASE_URL/auth/callback/<provider-id>`. You paste it into the login provider's app settings once. |
+| **Bearer token** | A secret you create in the UI and give to a client instead of a browser login. |
+| **Public endpoint** | `/mcp/public`, the optional no-sign-in URL. |
 
 ## How a request is authenticated
 

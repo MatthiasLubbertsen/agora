@@ -177,7 +177,7 @@ func (m *Manager) StartOAuth(ctx context.Context, up *store.Upstream, redirectUR
 			TokenEndpointAuthMethod: "none",
 			GrantTypes:              []string{"authorization_code", "refresh_token"},
 			ResponseTypes:           []string{"code"},
-			ClientName:              "mcp-full-off-mcps",
+			ClientName:              "MCP Full Off MCPs",
 			ApplicationType:         "web",
 		}, m.httpc)
 		if err != nil {
