@@ -64,5 +64,5 @@
   html { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
   body { @apply bg-background text-foreground;  }
   code, kbd, pre { font-family: var(--font-mono); }
-  ::selection { background: oklch(0.45 0.09 124 / 0.6); }
+  ::selection { background: color-mix(in oklab, var(--primary) 35%, transparent); color: var(--foreground); }
 }
