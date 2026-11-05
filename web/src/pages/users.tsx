@@ -9,8 +9,8 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Field, Label } from "@/components/ui/label";
-import { EmptyState, PageHeader, Skeleton } from "@/components/ui/misc";
+import { Label } from "@/components/ui/label";
+import { EmptyState, PageHeader, Skeleton, FormField, LoadingButton } from "@/components/ui/misc";
 import { timeAgo } from "@/lib/utils";
 
 export function Users() {
@@ -126,8 +126,8 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: () => v
           <DialogDescription>They can sign in as soon as you add them, using the same email at your login provider.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
-          <Field label="Email"><Input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@example.com" /></Field>
-          <Field label="Name (optional)"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <FormField label="Email"><Input type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@example.com" /></FormField>
+          <FormField label="Name (optional)"><Input value={name} onChange={(e) => setName(e.target.value)} /></FormField>
           <div className="flex items-center gap-3">
             <Checkbox id="admin" checked={admin} onCheckedChange={(v) => setAdmin(v === true)} />
             <Label htmlFor="admin">Make this person an admin</Label>
@@ -135,7 +135,7 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: () => v
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" loading={busy}>Add user</Button>
+            <LoadingButton type="submit" loading={busy}>Add user</LoadingButton>
           </DialogFooter>
         </form>
       </DialogContent>

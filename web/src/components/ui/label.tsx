@@ -1,17 +1,21 @@
-import * as React from "react";
-import * as LabelPrimitive from "@radix-ui/react-label";
-import { cn } from "@/lib/utils";
+import * as React from "react"
+import { cn } from "@/lib/utils"
+import { Label as LabelPrimitive } from "radix-ui"
 
-export function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
-  return <LabelPrimitive.Root className={cn("text-sm font-medium leading-none select-none", className)} {...props} />;
-}
-
-export function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
+function Label({
+  className,
+  ...props
+}: React.ComponentProps<typeof LabelPrimitive.Root>) {
   return (
-    <div className="grid gap-1.5">
-      <Label>{label}</Label>
-      {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
+    <LabelPrimitive.Root
+      data-slot="label"
+      className={cn(
+        "flex items-center gap-2 text-sm leading-none font-medium select-none group-data-[disabled=true]:pointer-events-none group-data-[disabled=true]:opacity-50 peer-disabled:cursor-not-allowed peer-disabled:opacity-50",
+        className
+      )}
+      {...props}
+    />
+  )
 }
+
+export { Label }

@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/misc";
+import { LoadingButton, Skeleton } from "@/components/ui/misc";
 import { Logo } from "@/components/layout";
 
 interface Info {
@@ -70,8 +69,8 @@ export function Consent() {
                   It will be able to list and call the tools of every MCP you've added. You can revoke it any time under Access.
                 </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" onClick={() => decide(false)} loading={busy === "no"} disabled={!!busy}>Deny</Button>
-                  <Button onClick={() => decide(true)} loading={busy === "yes"} disabled={!!busy}>Allow</Button>
+                  <LoadingButton variant="outline" onClick={() => decide(false)} loading={busy === "no"} disabled={!!busy}>Deny</LoadingButton>
+                  <LoadingButton onClick={() => decide(true)} loading={busy === "yes"} disabled={!!busy}>Allow</LoadingButton>
                 </div>
               </>
             )}

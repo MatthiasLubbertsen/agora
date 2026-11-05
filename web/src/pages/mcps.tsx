@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input, NativeSelect } from "@/components/ui/input";
-import { Field, Label } from "@/components/ui/label";
-import { EmptyState, PageHeader, Skeleton } from "@/components/ui/misc";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Label } from "@/components/ui/label";
+import { EmptyState, PageHeader, Skeleton, FormField, LoadingButton } from "@/components/ui/misc";
 import { Switch } from "@/components/ui/switch";
 import { cn, timeAgo } from "@/lib/utils";
 
@@ -271,43 +272,43 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
           <DialogDescription>Point the gateway at a remote MCP server.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
-          <Field label="Name">
+          <FormField label="Name">
             <Input value={name} autoFocus required placeholder="Notion" maxLength={80}
               onChange={(e) => { setName(e.target.value); if (!slugTouched) setSlug(slugify(e.target.value)); }} />
-          </Field>
-          <Field label="Server URL" hint="The MCP endpoint, e.g. https://mcp.notion.com/mcp">
+          </FormField>
+          <FormField label="Server URL" hint="The MCP endpoint, e.g. https://mcp.notion.com/mcp">
             <Input value={url} required type="url" placeholder="https://…" onChange={(e) => setUrl(e.target.value)} />
-          </Field>
+          </FormField>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Short name" hint={<>Tools become <code>{slug || "name"}__tool</code></>}>
+            <FormField label="Short name" hint={<>Tools become <code>{slug || "name"}__tool</code></>}>
               <Input value={slug} maxLength={32} pattern="[a-z0-9][a-z0-9\-]*" placeholder={slugify(name) || "notion"}
                 onChange={(e) => { setSlug(e.target.value.toLowerCase()); setSlugTouched(true); }} />
-            </Field>
-            <Field label="Label" hint={<>Shown after each tool name, like <code>Search ({label || slug || "Exa"})</code></>}>
+            </FormField>
+            <FormField label="Label" hint={<>Shown after each tool name, like <code>Search ({label || slug || "Exa"})</code></>}>
               <Input value={label} maxLength={16} placeholder={slug || "Exa"} onChange={(e) => setLabel(e.target.value)} />
-            </Field>
+            </FormField>
           </div>
-          <Field label="Transport">
+          <FormField label="Transport">
             <NativeSelect value={transport} onChange={(e) => setTransport(e.target.value as "http" | "sse")}>
               <option value="http">Streamable HTTP</option>
               <option value="sse">SSE (legacy)</option>
             </NativeSelect>
-          </Field>
-          <Field label="Authentication">
+          </FormField>
+          <FormField label="Authentication">
             <NativeSelect value={authType} onChange={(e) => setAuthType(e.target.value as Upstream["auth_type"])}>
               <option value="none">None</option>
               <option value="header">API key / bearer token</option>
               <option value="oauth">OAuth (log in to it)</option>
             </NativeSelect>
-          </Field>
+          </FormField>
           {authType === "header" && (
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Header" hint="Leave empty for Authorization">
+              <FormField label="Header" hint="Leave empty for Authorization">
                 <Input value={headerName} placeholder="Authorization" onChange={(e) => setHeaderName(e.target.value)} />
-              </Field>
-              <Field label="Value" hint={initial?.has_secret ? "Leave empty to keep the saved one" : "Sent as Bearer … for Authorization"}>
+              </FormField>
+              <FormField label="Value" hint={initial?.has_secret ? "Leave empty to keep the saved one" : "Sent as Bearer … for Authorization"}>
                 <Input type="password" autoComplete="off" value={secret} required={!initial?.has_secret} onChange={(e) => setSecret(e.target.value)} />
-              </Field>
+              </FormField>
             </div>
           )}
           {authType === "oauth" && (
@@ -325,7 +326,7 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" loading={busy}>{initial ? "Save" : "Add MCP"}</Button>
+            <LoadingButton type="submit" loading={busy}>{initial ? "Save" : "Add MCP"}</LoadingButton>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -386,8 +387,8 @@ function ConnectDialog({ state, onClose, onSubmit }: { state: { up: Upstream; er
             If the MCP doesn't support automatic setup, create an OAuth app on its side with redirect URL{" "}
             <code className="break-all text-foreground">{location.origin}/oauth/upstream/callback</code> and enter its credentials.
           </p>
-          <Field label="Client ID"><Input value={id} required onChange={(e) => setId(e.target.value)} /></Field>
-          <Field label="Client secret (if it has one)"><Input type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} /></Field>
+          <FormField label="Client ID"><Input value={id} required onChange={(e) => setId(e.target.value)} /></FormField>
+          <FormField label="Client secret (if it has one)"><Input type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} /></FormField>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit">Try again</Button>
