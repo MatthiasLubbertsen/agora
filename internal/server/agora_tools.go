@@ -44,7 +44,7 @@ func (s *Server) addAgoraTools(srv *mcp.Server, p *principal, used map[string]bo
 		Name:  reservedSlug + "__add_mcp",
 		Title: "Add MCP (Agora)",
 		Description: "(Agora) Add a remote MCP server to your gateway. Its tools show up as <short_name>__<tool> the next time the client refreshes its tool list. " +
-			"For auth_type \"header\" pass the key in secret; for \"oauth\" the user must press Connect on the MCPs page of the website afterwards.",
+			"For auth_type \"header\" pass the key in secret. If the MCP needs a login (auth_type \"oauth\", or detected automatically), the result has a login_url: give it to the user to open in their browser.",
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in addMCPIn) (*mcp.CallToolResult, addMCPOut, error) {
 		out, err := s.addMCP(detached(ctx), p, in)
 		if err != nil {
@@ -86,6 +86,7 @@ type addMCPOut struct {
 	Prompts   int    `json:"prompts"`
 	Resources int    `json:"resources"`
 	Error     string `json:"error,omitempty"`
+	LoginURL  string `json:"login_url,omitempty" jsonschema:"when status is needs_auth: a link the user must open in their browser to log in to this MCP; valid for 10 minutes"`
 	Next      string `json:"next,omitempty"`
 }
 
@@ -115,13 +116,34 @@ func (s *Server) addMCP(ctx context.Context, p *principal, in addMCPIn) (addMCPO
 	defer cancel()
 	st := s.up.Check(cctx, u)
 	out := addMCPOut{ID: u.ID, Slug: u.Slug, Tools: st.Tools, Prompts: st.Prompts, Resources: st.Resources, Error: st.Error}
+	// A server that wants a login but was added without auth is switched to
+	// OAuth, so the user gets a login link instead of a dead end.
+	if !st.OK && st.NeedsAuth && u.AuthType == "none" && in.AuthType == "" {
+		u.AuthType = "oauth"
+		if err := s.st.UpdateUpstream(ctx, u); err == nil {
+			s.up.Forget(u.ID)
+		} else {
+			u.AuthType = "none"
+		}
+	}
 	switch {
 	case st.OK:
 		out.Status = "connected"
 		out.Next = "Refresh the tool list in your client to see " + u.Slug + "__* tools."
-	case st.NeedsAuth || u.AuthType == "oauth":
+	case u.AuthType == "oauth":
+		out.Status, out.Error = "needs_auth", ""
+		link, err := s.up.StartOAuth(ctx, u, s.cfg.BaseURL+"/oauth/upstream/callback", "", "")
+		if err != nil {
+			out.Error = err.Error()
+			out.Next = "The MCP was saved but automatic login setup failed. The user can finish on " + s.cfg.BaseURL + "/mcps (press Connect, entering a client ID and secret if asked)."
+			break
+		}
+		out.LoginURL = link
+		out.Next = "Tell the user to log in to " + u.Name + " by opening login_url in a browser where they are signed in to Agora as the same account. " +
+			"The link works once and expires in 10 minutes. Afterwards refresh the tool list to see " + u.Slug + "__* tools."
+	case st.NeedsAuth:
 		out.Status = "needs_auth"
-		out.Next = "Open " + s.cfg.BaseURL + "/mcps and press Connect on this MCP to log in."
+		out.Next = "The MCP rejected the credentials. Check the key on " + s.cfg.BaseURL + "/mcps."
 	default:
 		out.Status = "unreachable"
 		out.Next = "The MCP was saved but couldn't be reached. Check the URL and credentials on " + s.cfg.BaseURL + "/mcps."

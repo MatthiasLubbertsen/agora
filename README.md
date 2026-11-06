@@ -41,7 +41,7 @@ Besides your MCPs' tools, the gateway exposes two of its own under the reserved 
 
 | Tool | What it does |
 | --- | --- |
-| `agora__add_mcp` | Adds a remote MCP (name, URL, optional slug/label/transport/auth). Tests the connection and reports `connected`, `needs_auth` or `unreachable`. For OAuth MCPs you still press **Connect** on the MCPs page. |
+| `agora__add_mcp` | Adds a remote MCP (name, URL, optional slug/label/transport/auth). Tests the connection and reports `connected`, `needs_auth` or `unreachable`. If the MCP needs a login (you asked for `oauth`, or it answered 401 and no auth was given, in which case it is switched to OAuth) the result carries a `login_url`; the agent hands it to you, you open it in a browser where you're signed in to Agora, and the MCP connects when you approve. The link works once and lasts 10 minutes. |
 | `agora__stats` | Per-MCP health, tool/prompt/resource counts and a rough token estimate of the tool definitions, plus totals. Useful for seeing which MCPs are expensive to load. |
 
 Anonymous (`/mcp/public`) callers get neither. A bearer token limited to specific MCPs gets `agora__stats` only, because adding an MCP would go outside its scope. API keys passed to `add_mcp` travel through the model, so prefer the website for sensitive credentials.

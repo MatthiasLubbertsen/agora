@@ -190,3 +190,51 @@ func TestUpstreamOAuthEndToEnd(t *testing.T) {
 		t.Fatalf("bad state accepted: %q", bad.Header.Get("Location"))
 	}
 }
+
+func TestAgoraAddMCPReturnsLoginLink(t *testing.T) {
+	e := newEnv(t)
+	up := newOAuthMCP(t)
+	ctx := context.Background()
+	cs := connect(t, e.ts.URL+"/mcp", newToken(t, e, nil))
+
+	// No auth_type given: the gateway notices the 401, switches to OAuth and hands back a login link.
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__add_mcp", Arguments: map[string]any{"name": "Secured", "url": up.URL + "/mcp"}})
+	if err != nil || res.IsError {
+		t.Fatalf("add: %v %+v", err, res)
+	}
+	out := res.StructuredContent.(map[string]any)
+	link, _ := out["login_url"].(string)
+	if out["status"] != "needs_auth" || !strings.HasPrefix(link, up.URL+"/authorize") || !strings.Contains(out["next"].(string), "login_url") {
+		t.Fatalf("add result = %v", out)
+	}
+	if u, _ := e.st.GetUpstream(ctx, e.user.ID, out["id"].(string)); u == nil || u.AuthType != "oauth" {
+		t.Fatalf("upstream not switched to oauth: %+v", u)
+	}
+
+	// The user opens the link; after approving, the callback connects the MCP.
+	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	az, _ := noRedirect.Get(link)
+	loc, _ := az.Location()
+	az.Body.Close()
+	sess, _ := e.st.CreateSession(ctx, e.user.ID, sessionTTL)
+	req, _ := http.NewRequest("GET", e.ts.URL+loc.RequestURI(), nil)
+	req.AddCookie(&http.Cookie{Name: cookieSession, Value: sess})
+	cb, err := noRedirect.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cb.Body.Close()
+	if !strings.HasPrefix(cb.Header.Get("Location"), "/mcps?connected=") {
+		t.Fatalf("callback redirected to %q", cb.Header.Get("Location"))
+	}
+	if n := strings.Join(toolNames(t, connect(t, e.ts.URL+"/mcp", newToken(t, e, nil))), ","); !strings.Contains(n, "secured__whoami") {
+		t.Fatalf("tools after login = %s", n)
+	}
+
+	// An explicit header-auth MCP that rejects its key is not switched to OAuth and gets no link.
+	res, _ = cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__add_mcp", Arguments: map[string]any{"name": "Keyed", "url": up.URL + "/mcp", "auth_type": "header", "secret": "wrong"}})
+	out = res.StructuredContent.(map[string]any)
+	if out["status"] != "needs_auth" || out["login_url"] != nil {
+		t.Fatalf("header add result = %v", out)
+	}
+}
