@@ -2,10 +2,30 @@ import * as React from "react";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "./button";
+import { Field, FieldDescription, FieldLabel } from "./field";
+import { Skeleton } from "./skeleton";
+import { Spinner } from "./spinner";
 import { cn } from "@/lib/utils";
 
-export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-accent/60", className)} />;
+export { Skeleton };
+
+export function LoadingButton({ loading, children, disabled, ...props }: React.ComponentProps<typeof Button> & { loading?: boolean }) {
+  return (
+    <Button disabled={disabled || loading} {...props}>
+      {loading && <Spinner />}
+      {children}
+    </Button>
+  );
+}
+
+export function FormField({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Field>
+      <FieldLabel>{label}</FieldLabel>
+      {children}
+      {hint && <FieldDescription>{hint}</FieldDescription>}
+    </Field>
+  );
 }
 
 export function useCopy() {

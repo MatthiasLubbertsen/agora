@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input, NativeSelect } from "@/components/ui/input";
-import { Field, Label } from "@/components/ui/label";
-import { CodeBlock, EmptyState, PageHeader, Skeleton } from "@/components/ui/misc";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Label } from "@/components/ui/label";
+import { CodeBlock, EmptyState, PageHeader, Skeleton, FormField, LoadingButton } from "@/components/ui/misc";
 import { timeAgo } from "@/lib/utils";
 
 export function Tokens() {
@@ -155,7 +156,7 @@ function CreateDialog({ ups, onClose, onCreated }: { ups: Upstream[]; onClose: (
           <DialogDescription>One token per client makes it easy to revoke just one.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
-          <Field label="Name"><Input autoFocus required maxLength={80} placeholder="Claude Desktop" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <FormField label="Name"><Input autoFocus required maxLength={80} placeholder="Claude Desktop" value={name} onChange={(e) => setName(e.target.value)} /></FormField>
           <div className="grid gap-2">
             <Label>Can use</Label>
             <NativeSelect value={scoped ? "some" : "all"} onChange={(e) => setScoped(e.target.value === "some")}>
@@ -174,18 +175,18 @@ function CreateDialog({ ups, onClose, onCreated }: { ups: Upstream[]; onClose: (
               </div>
             )}
           </div>
-          <Field label="Expires">
+          <FormField label="Expires">
             <NativeSelect value={days} onChange={(e) => setDays(e.target.value)}>
               <option value="0">Never</option>
               <option value="30">In 30 days</option>
               <option value="90">In 90 days</option>
               <option value="365">In a year</option>
             </NativeSelect>
-          </Field>
+          </FormField>
           {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" loading={busy}>Create token</Button>
+            <LoadingButton type="submit" loading={busy}>Create token</LoadingButton>
           </DialogFooter>
         </form>
       </DialogContent>

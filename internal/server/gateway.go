@@ -163,7 +163,7 @@ func errResult(msg string) *mcp.CallToolResult {
 // buildServer assembles an MCP server exposing every tool, prompt and resource
 // of the caller's upstreams, each prefixed with the upstream's short name.
 func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "mofm", Version: "1.0.0"}, &mcp.ServerOptions{
+	srv := mcp.NewServer(&mcp.Implementation{Name: "agora", Version: "1.0.0"}, &mcp.ServerOptions{
 		Instructions: "This server merges several MCP servers. Every tool and prompt name starts with the name of the MCP it comes from, followed by two underscores.",
 		// What a caller sees depends on who they are, so no shared cache may keep it.
 		SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs, c.CacheScope = 0, "private" },

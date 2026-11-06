@@ -19,4 +19,4 @@ run: build
 	./bin/gateway
 
 docker:
-	docker build -t mofm .
+	docker build -t agora .

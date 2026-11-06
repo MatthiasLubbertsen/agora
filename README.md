@@ -1,10 +1,10 @@
-# MCP Full Of MCPs
+# Agora
 
-The gateway that is full of MCPs. Short name: **mofm**.
+The MCP gateway: one marketplace for all your MCPs.
 
 One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mode web UI; every client (Claude, Cursor, VS Code, …) connects to a single URL and sees all your tools, namespaced as `slug__tool`.
 
-- **Go** backend, single static binary, SQLite storage, website embedded (Vite + React + shadcn/ui + Geist).
+- **Go** backend, single static binary, SQLite storage, website embedded (Vite + React + shadcn/ui + Lexend).
 - **Multi-user.** Every user owns their own private MCPs, tokens and logins. Nobody sees anyone else's.
 - **Three ways in** for MCP clients: OAuth, bearer token, or no auth (opt-in, public MCPs only).
 - **Website login via OIDC** (Hack Club Auth, Tinyauth, or any OIDC provider you configure).
