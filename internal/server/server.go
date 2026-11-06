@@ -34,6 +34,8 @@ type Server struct {
 	oidc  *oidcAuth
 	setup string // one-time admin bootstrap token; empty once an admin exists
 
+	sessions sessionRegistry
+
 	regLimit  *limiter
 	authLimit *limiter
 }

@@ -11,8 +11,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -458,6 +460,37 @@ func TestAgoraAddMCPAndStats(t *testing.T) {
 	}
 }
 
+func TestAgoraInfoAndInstructions(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	cs := connect(t, e.ts.URL+"/mcp", newToken(t, e, nil))
+	ins := cs.InitializeResult().Instructions
+	for _, want := range []string{"agora__stats", "needs_auth", "login_url", "try again", "agora__add_mcp", "agora__info"} {
+		if !strings.Contains(ins, want) {
+			t.Errorf("instructions missing %q:\n%s", want, ins)
+		}
+	}
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__info"})
+	if err != nil || res.IsError {
+		t.Fatalf("info: %v %+v", err, res)
+	}
+	out := res.StructuredContent.(map[string]any)
+	if !strings.Contains(out["overview"].(string), "MCP gateway") || !strings.Contains(out["logging_in"].(string), "login_url") || len(out["agora_tools"].([]any)) != 3 {
+		t.Fatalf("info = %v", out)
+	}
+
+	// A scoped token's instructions and info don't mention add_mcp.
+	up := e.addUpstream(t, "alpha", mockUpstream(t, "echo").URL, false)
+	sc := connect(t, e.ts.URL+"/mcp", newToken(t, e, []string{up.ID}))
+	if strings.Contains(sc.InitializeResult().Instructions, "agora__add_mcp") {
+		t.Fatal("scoped instructions mention add_mcp")
+	}
+	res, _ = sc.CallTool(ctx, &mcp.CallToolParams{Name: "agora__info"})
+	if len(res.StructuredContent.(map[string]any)["agora_tools"].([]any)) != 2 {
+		t.Fatalf("scoped info = %v", res.StructuredContent)
+	}
+}
+
 func TestAgoraToolsRespectScopeAndAnonymous(t *testing.T) {
 	e := newEnv(t)
 	up := e.addUpstream(t, "alpha", mockUpstream(t, "echo").URL, false)
@@ -471,5 +504,95 @@ func TestAgoraToolsRespectScopeAndAnonymous(t *testing.T) {
 	e.st.SetSetting(context.Background(), settingAllowAnonymous, "true")
 	if n := strings.Join(allToolNames(t, connect(t, e.ts.URL+"/mcp/public", "")), ","); strings.Contains(n, "agora__") {
 		t.Fatalf("anonymous tools = %s", n)
+	}
+}
+
+func TestToolListChangedOnUpstreamChanges(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	tok := "mcpt_" + crypto.RandToken(16)
+	if err := e.st.CreateAPIToken(ctx, &store.APIToken{UserID: e.user.ID, Name: "t", Prefix: tok[:10]}, tok); err != nil {
+		t.Fatal(err)
+	}
+	changed := make(chan struct{}, 8)
+	c := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, &mcp.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) { changed <- struct{}{} },
+	})
+	cs, err := c.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: e.ts.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerRT{tok}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cs.Close() })
+	if n := toolNames(t, cs); len(n) != 0 {
+		t.Fatalf("expected no tools, got %v", n)
+	}
+
+	wait := func(what string, want func([]string) bool) {
+		t.Helper()
+		select {
+		case <-changed:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: no tools/list_changed", what)
+		}
+		time.Sleep(100 * time.Millisecond) // let the debounced notifications settle
+		if n := toolNames(t, cs); !want(n) {
+			t.Fatalf("%s: tools = %v", what, n)
+		}
+		for len(changed) > 0 {
+			<-changed
+		}
+	}
+	has := func(name string) func([]string) bool {
+		return func(n []string) bool { return slices.Contains(n, name) }
+	}
+
+	up := e.addUpstream(t, "alpha", mockUpstream(t, "echo").URL, false)
+	e.srv.upstreamsChanged(e.user.ID, false)
+	wait("add", has("alpha__echo"))
+
+	up.Enabled = false
+	if err := e.st.UpdateUpstream(ctx, up); err != nil {
+		t.Fatal(err)
+	}
+	e.srv.upstreamsChanged(e.user.ID, false)
+	wait("disable", func(n []string) bool { return len(n) == 0 })
+
+	up.Enabled = true
+	e.st.UpdateUpstream(ctx, up)
+	e.srv.upstreamsChanged(e.user.ID, false)
+	wait("enable", has("alpha__echo"))
+
+	if err := e.st.DeleteUpstream(ctx, e.user.ID, up.ID); err != nil {
+		t.Fatal(err)
+	}
+	e.srv.upstreamsChanged(e.user.ID, false)
+	wait("remove", func(n []string) bool { return len(n) == 0 })
+}
+
+func TestSessionBelongsToItsOpener(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	mk := func(u *store.User) string {
+		tok := "mcpt_" + crypto.RandToken(16)
+		e.st.CreateAPIToken(ctx, &store.APIToken{UserID: u.ID, Name: "t", Prefix: tok[:10]}, tok)
+		return tok
+	}
+	other, err := e.st.CreateUser(ctx, "other@example.com", "Other", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := connect(t, e.ts.URL+"/mcp", mk(e.user))
+	req, _ := http.NewRequest("POST", e.ts.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	req.Header.Set("Authorization", "Bearer "+mk(other))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Mcp-Session-Id", cs.ID())
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 403 {
+		t.Fatalf("status %d, want 403", resp.StatusCode)
 	}
 }

@@ -37,14 +37,15 @@ The gateway is a full OAuth 2.1 authorization server for MCP clients: protected-
 
 ## Agora's own tools
 
-Besides your MCPs' tools, the gateway exposes two of its own under the reserved prefix `agora__` (so `agora` can't be used as an MCP's short name):
+Besides your MCPs' tools, the gateway exposes three of its own under the reserved prefix `agora__` (so `agora` can't be used as an MCP's short name):
 
 | Tool | What it does |
 | --- | --- |
+| `agora__info` | Explains the idea: what Agora is, how tools are named, what the `agora__` tools do and how logins work. |
 | `agora__add_mcp` | Adds a remote MCP (name, URL, optional slug/label/transport/auth). Tests the connection and reports `connected`, `needs_auth` or `unreachable`. If the MCP needs a login (you asked for `oauth`, or it answered 401 and no auth was given, in which case it is switched to OAuth) the result carries a `login_url`; the agent hands it to you, you open it in a browser where you're signed in to Agora, and the MCP connects when you approve. The link works once and lasts 10 minutes. |
 | `agora__stats` | Per-MCP health, tool/prompt/resource counts and a rough token estimate of the tool definitions, plus totals. Useful for seeing which MCPs are expensive to load. |
 
-If one of your OAuth MCPs loses its login, a tool call to it returns an error telling the agent to give you a fresh login link and retry once you're done, and `agora__stats` lists the link next to that MCP. Anonymous (`/mcp/public`) callers get neither. A bearer token limited to specific MCPs gets `agora__stats` only, because adding an MCP would go outside its scope. API keys passed to `add_mcp` travel through the model, so prefer the website for sensitive credentials.
+If one of your OAuth MCPs loses its login, a tool call to it returns an error telling the agent to give you a fresh login link and retry once you're done, and `agora__stats` lists the link next to that MCP. Anonymous (`/mcp/public`) callers get neither. A bearer token limited to specific MCPs gets `agora__info` and `agora__stats` only, because adding an MCP would go outside its scope. API keys passed to `add_mcp` travel through the model, so prefer the website for sensitive credentials.
 
 ## Quick start
 
@@ -100,7 +101,7 @@ Admin-only switches live in the UI under **Settings**: *open sign-up* (off by de
 
 ## Limits to know about
 
-- Gateway ↔ client is **stateless**: tool lists are fetched per request (each upstream's catalogue is cached for 60 s). Upstream-initiated requests (sampling, elicitation, progress, list-changed notifications) are not forwarded.
+- Gateway ↔ client uses **stateful sessions** with a server-to-client stream: when an MCP is added, removed, enabled, disabled or edited, connected clients get `notifications/tools/list_changed` (and prompts/resources equivalents), so new tools appear without a restart if the client honours it. Each upstream's catalogue is cached for 60 s. Upstream-initiated requests (sampling, elicitation, progress, list-changed notifications) are not forwarded.
 - Resource *templates* are not forwarded; concrete resources, tools and prompts are.
 - Upstream OAuth refresh does not send the RFC 8707 `resource` parameter (the initial authorization does).
 - SQLite means one instance. Run a single replica.

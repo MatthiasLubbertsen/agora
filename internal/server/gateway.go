@@ -23,6 +23,20 @@ type principal struct {
 
 type principalKey struct{}
 
+type newSessionKey struct{}
+
+// newSessionHolder makes the two getServer calls the SDK makes for one
+// session-opening request share a single server.
+type newSessionHolder struct {
+	once sync.Once
+	srv  *mcp.Server
+}
+
+func (h *newSessionHolder) get(build func() *mcp.Server) *mcp.Server {
+	h.once.Do(func() { h.srv = build() })
+	return h.srv
+}
+
 func (s *Server) resourceMetadataURL() string {
 	return s.cfg.BaseURL + "/.well-known/oauth-protected-resource/mcp"
 }
@@ -53,13 +67,28 @@ func corsMCP(w http.ResponseWriter, r *http.Request) bool {
 // shows a user's own MCPs; the public one (when enabled by an admin) shows
 // only MCPs their owners ticked "public".
 func (s *Server) gatewayHandler(public bool) http.Handler {
+	// Sessions are stateful so the server can push notifications/tools/list_changed
+	// (and the prompt/resource equivalents) down the session's stream whenever an
+	// MCP is added, removed, enabled or disabled.
+	//
+	// The SDK calls this for every request, not just the one that opens a
+	// session, so the catalogue is only built for a POST without a session id
+	// (once per request); everything else gets an empty placeholder.
+	placeholder := mcp.NewServer(&mcp.Implementation{Name: "agora", Version: "1.0.0"}, nil)
 	mcpH := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		p, _ := r.Context().Value(principalKey{}).(*principal)
 		if p == nil {
 			return nil
 		}
-		return s.buildServer(r.Context(), p)
-	}, &mcp.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true})
+		if r.Method != http.MethodPost || r.Header.Get("Mcp-Session-Id") != "" {
+			return placeholder
+		}
+		h, _ := r.Context().Value(newSessionKey{}).(*newSessionHolder)
+		if h == nil {
+			return placeholder
+		}
+		return h.get(func() *mcp.Server { return s.newSession(r.Context(), p) })
+	}, &mcp.StreamableHTTPOptions{SessionTimeout: sessionIdleTimeout, DisableLocalhostProtection: true})
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if corsMCP(w, r) {
@@ -79,7 +108,15 @@ func (s *Server) gatewayHandler(public bool) http.Handler {
 				return
 			}
 		}
-		mcpH.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, p)))
+		// A session belongs to whoever opened it; another caller who learns the id
+		// must not be able to use it. Unknown ids fall through to the SDK (404).
+		if id := r.Header.Get("Mcp-Session-Id"); id != "" && !s.sessions.owns(id, p) {
+			writeErr(w, 403, "session belongs to a different caller")
+			return
+		}
+		ctx := context.WithValue(r.Context(), principalKey{}, p)
+		ctx = context.WithValue(ctx, newSessionKey{}, &newSessionHolder{})
+		mcpH.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -162,16 +199,32 @@ func errResult(msg string) *mcp.CallToolResult {
 
 // buildServer assembles an MCP server exposing every tool, prompt and resource
 // of the caller's upstreams, each prefixed with the upstream's short name.
-func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
+func (s *Server) buildServer(ctx context.Context, p *principal) (*mcp.Server, catalog) {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "agora", Version: "1.0.0"}, &mcp.ServerOptions{
-		Instructions: "This server merges several MCP servers. Every tool and prompt name starts with the name of the MCP it comes from, followed by two underscores.",
+		Instructions: agoraInstructions(p),
 		// What a caller sees depends on who they are, so no shared cache may keep it.
 		SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs, c.CacheScope = 0, "private" },
+		// Advertise list-changed even when the caller has no MCPs yet, so the first
+		// one they add shows up without reconnecting.
+		Capabilities: &mcp.ServerCapabilities{
+			Tools:     &mcp.ToolCapabilities{ListChanged: true},
+			Prompts:   &mcp.PromptCapabilities{ListChanged: true},
+			Resources: &mcp.ResourceCapabilities{ListChanged: true},
+		},
 	})
-	ups := s.principalUpstreams(ctx, p)
+	return srv, s.fill(ctx, srv, p)
+}
 
+// catalog records what fill registered, so a refresh can drop what's gone.
+type catalog struct{ tools, prompts, resources []string }
+
+// fill (re)registers every tool, prompt and resource the caller can currently
+// see. Registering a name that already exists replaces it.
+func (s *Server) fill(ctx context.Context, srv *mcp.Server, p *principal) catalog {
+	ups := s.principalUpstreams(ctx, p)
 	snaps := s.fetchSnaps(ctx, ups)
 
+	var cat catalog
 	usedSlug := map[string]bool{reservedSlug: true}
 	usedName := map[string]bool{}
 	s.addAgoraTools(srv, p, usedName)
@@ -184,9 +237,9 @@ func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
 			slug = slug + "-" + us.up.ID[:4]
 		}
 		usedSlug[slug] = true
-		s.addUpstream(srv, p, slug, us, usedName)
+		s.addUpstream(srv, p, slug, us, usedName, &cat)
 	}
-	return srv
+	return cat
 }
 
 // fetchSnaps fetches every upstream's catalogue in parallel, bounded so one
@@ -252,7 +305,7 @@ func gwName(slug, name string) string {
 	return n
 }
 
-func (s *Server) addUpstream(srv *mcp.Server, p *principal, slug string, us *upstreamSnap, used map[string]bool) {
+func (s *Server) addUpstream(srv *mcp.Server, p *principal, slug string, us *upstreamSnap, used map[string]bool, cat *catalog) {
 	up := us.up
 	label := up.DisplayLabel()
 	for _, t := range us.snap.Tools {
@@ -270,6 +323,7 @@ func (s *Server) addUpstream(srv *mcp.Server, p *principal, slug string, us *ups
 			InputSchema: objectSchema(t.InputSchema), OutputSchema: t.OutputSchema}
 		func() {
 			defer func() { _ = recover() }() // a malformed upstream schema must not break the whole server
+			cat.tools = append(cat.tools, name)
 			srv.AddTool(tool, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 				var args any
 				if len(req.Params.Arguments) > 0 {
@@ -299,6 +353,7 @@ func (s *Server) addUpstream(srv *mcp.Server, p *principal, slug string, us *ups
 		if ptitle == "" {
 			ptitle = humanize(pr.Name)
 		}
+		cat.prompts = append(cat.prompts, name)
 		srv.AddPrompt(&mcp.Prompt{Name: name, Title: titled(label, ptitle), Description: tagged(label, pr.Description), Arguments: pr.Arguments},
 			func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 				var res *mcp.GetPromptResult
@@ -317,6 +372,7 @@ func (s *Server) addUpstream(srv *mcp.Server, p *principal, slug string, us *ups
 			continue
 		}
 		used[gw] = true
+		cat.resources = append(cat.resources, gw)
 		srv.AddResource(&mcp.Resource{URI: gw, Name: label + ": " + rs.Name, Title: rs.Title, Description: rs.Description,
 			MIMEType: rs.MIMEType, Size: rs.Size, Annotations: rs.Annotations},
 			func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {

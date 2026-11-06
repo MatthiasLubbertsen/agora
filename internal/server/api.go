@@ -176,6 +176,7 @@ func (s *Server) handleUpstreamCreate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, "couldn't save")
 		return
 	}
+	s.upstreamsChanged(u.UserID, u.IsPublic)
 	writeJSON(w, 201, s.view(r.Context(), u))
 }
 
@@ -185,7 +186,7 @@ func (s *Server) handleUpstreamUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "not found")
 		return
 	}
-	oldURL, oldAuth := u.URL, u.AuthType
+	oldURL, oldAuth, wasPublic := u.URL, u.AuthType, u.IsPublic
 	var in upstreamInput
 	if !readJSON(w, r, &in) {
 		return
@@ -206,16 +207,22 @@ func (s *Server) handleUpstreamUpdate(w http.ResponseWriter, r *http.Request) {
 		_ = s.st.DeleteUpstreamOAuth(r.Context(), u.ID) // login was for the old server
 	}
 	s.up.Forget(u.ID)
+	s.upstreamsChanged(u.UserID, u.IsPublic || wasPublic)
 	writeJSON(w, 200, s.view(r.Context(), u))
 }
 
 func (s *Server) handleUpstreamDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	var wasPublic bool
+	if old, err := s.st.GetUpstream(r.Context(), userFrom(r).ID, id); err == nil {
+		wasPublic = old.IsPublic
+	}
 	if err := s.st.DeleteUpstream(r.Context(), userFrom(r).ID, id); err != nil {
 		writeErr(w, 404, "not found")
 		return
 	}
 	s.up.Forget(id)
+	s.upstreamsChanged(userFrom(r).ID, wasPublic)
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
@@ -299,6 +306,7 @@ func (s *Server) handleUpstreamOAuthCallback(w http.ResponseWriter, r *http.Requ
 		http.Redirect(w, r, "/mcps?error="+url.QueryEscape(err.Error()), http.StatusFound)
 		return
 	}
+	s.upstreamsChanged(userFrom(r).ID, false)
 	http.Redirect(w, r, "/mcps?connected="+url.QueryEscape(id), http.StatusFound)
 }
 
@@ -310,6 +318,7 @@ func (s *Server) handleUpstreamOAuthDisconnect(w http.ResponseWriter, r *http.Re
 	}
 	_ = s.st.DeleteUpstreamOAuth(r.Context(), u.ID)
 	s.up.Forget(u.ID)
+	s.upstreamsChanged(u.UserID, u.IsPublic)
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
@@ -495,6 +504,7 @@ func (s *Server) handleAdminUserDelete(w http.ResponseWriter, r *http.Request) {
 	for _, u := range ups {
 		s.up.Forget(u.ID)
 	}
+	s.upstreamsChanged("", true)
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 

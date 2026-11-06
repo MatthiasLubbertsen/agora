@@ -19,6 +19,24 @@ import (
 // agora__stats), so no MCP can be added under it.
 const reservedSlug = "agora"
 
+// agoraInstructions is the server-level `instructions` text clients show their
+// model. It describes the merged namespace and the gateway's own tools.
+func agoraInstructions(p *principal) string {
+	b := "Agora is one MCP endpoint that merges several MCP servers. Every tool and prompt name starts with the short name of the MCP it comes from, followed by two underscores (for example exa__search)."
+	if p.user == nil {
+		return b
+	}
+	b += "\n\nAgora's own tools use the prefix agora__. Call agora__info for an overview of the idea."
+	b += "\n\nagora__stats lists every MCP with its health and counts. An MCP whose status is needs_auth has lost its login (or never finished it); " +
+		"stats then includes a login_url for it. Give that link to the user, tell them to open it in a browser where they are signed in to Agora, " +
+		"and ask them to tell you once they have approved so you can try again. The same applies when a tool call fails with a message saying the MCP isn't logged in: " +
+		"the message contains a fresh login link. Links work once and expire after 10 minutes, so call agora__stats again if the user needs a new one."
+	if p.scope == nil {
+		b += "\n\nagora__add_mcp adds a new remote MCP. If the result has a login_url, give it to the user the same way."
+	}
+	return b
+}
+
 // addAgoraTools registers the gateway's own management tools. Anonymous callers
 // get none. A token limited to specific MCPs gets stats only, because adding an
 // MCP would step outside the scope it was limited to.
@@ -26,6 +44,17 @@ func (s *Server) addAgoraTools(srv *mcp.Server, p *principal, used map[string]bo
 	if p.user == nil {
 		return
 	}
+	used[reservedSlug+"__info"] = true
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:  reservedSlug + "__info",
+		Title: "Info (Agora)",
+		Description: "(Agora) Explain what Agora is, how its tools are named, what the agora__ tools do and how logging in to an MCP works. " +
+			"Call this when the user asks what Agora is or how to use it.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ infoIn) (*mcp.CallToolResult, infoOut, error) {
+		return nil, s.info(p), nil
+	})
+
 	used[reservedSlug+"__stats"] = true
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:  reservedSlug + "__stats",
@@ -87,6 +116,39 @@ func (s *Server) reauthMessage(ctx context.Context, p *principal, u *store.Upstr
 		"Ask them to tell you when they're done, then try this call again.", u.Name, link)
 }
 
+// ---- agora__info ----
+
+type infoIn struct{}
+
+type infoOut struct {
+	Overview string   `json:"overview"`
+	Naming   string   `json:"naming"`
+	Tools    []string `json:"agora_tools"`
+	Login    string   `json:"logging_in"`
+	Website  string   `json:"website"`
+}
+
+func (s *Server) info(p *principal) infoOut {
+	out := infoOut{
+		Overview: "Agora is an MCP gateway: one MCP endpoint that fronts many MCP servers. The user adds remote MCPs once (on the website or with agora__add_mcp) " +
+			"and every client they use (Claude, Cursor, VS Code, ...) connects to this single URL and sees all of them. Each user's MCPs, tokens and logins are private to them, " +
+			"except MCPs they explicitly mark public.",
+		Naming: "Every tool and prompt is named <short_name>__<tool>, where short_name is the MCP's slug, e.g. exa__search. Titles and descriptions are tagged with the MCP's label, e.g. \"Search (Exa)\".",
+		Tools: []string{
+			"agora__info: this overview.",
+			"agora__stats: health, tool/prompt/resource counts and an estimated token cost for each MCP.",
+		},
+		Login: "Some MCPs need the user to log in. When agora__stats shows status needs_auth, or a tool call says the MCP isn't logged in, there is a login_url. " +
+			"Give it to the user, have them open it in a browser where they are signed in to Agora, and ask them to tell you when they're done; then try again. " +
+			"A link works once and lasts 10 minutes.",
+		Website: s.cfg.BaseURL,
+	}
+	if p.scope == nil {
+		out.Tools = append(out.Tools, "agora__add_mcp: add a remote MCP by URL; it is tested right away and a login_url is returned if it needs a login.")
+	}
+	return out
+}
+
 // ---- agora__add_mcp ----
 
 type addMCPIn struct {
@@ -138,6 +200,7 @@ func (s *Server) addMCP(ctx context.Context, p *principal, in addMCPIn) (addMCPO
 	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	st := s.up.Check(cctx, u)
+	defer s.upstreamsChanged(u.UserID, u.IsPublic) // connected clients pick the new tools up without reconnecting
 	out := addMCPOut{ID: u.ID, Slug: u.Slug, Tools: st.Tools, Prompts: st.Prompts, Resources: st.Resources, Error: st.Error}
 	// A server that wants a login but was added without auth is switched to
 	// OAuth, so the user gets a login link instead of a dead end.
