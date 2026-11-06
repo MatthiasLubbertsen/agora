@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -236,5 +237,45 @@ func TestAgoraAddMCPReturnsLoginLink(t *testing.T) {
 	out = res.StructuredContent.(map[string]any)
 	if out["status"] != "needs_auth" || out["login_url"] != nil {
 		t.Fatalf("header add result = %v", out)
+	}
+}
+
+func TestExpiredLoginGivesAgentAReauthLink(t *testing.T) {
+	e := newEnv(t)
+	up := newOAuthMCP(t)
+	ctx := context.Background()
+	u := &store.Upstream{UserID: e.user.ID, Slug: "secured", Name: "Secured", URL: up.URL + "/mcp", Transport: "http", AuthType: "oauth", Enabled: true}
+	if err := e.st.CreateUpstream(ctx, u); err != nil {
+		t.Fatal(err)
+	}
+	// The MCP was connected once; then the server drops the token (login expired).
+	e.st.PutUpstreamOAuth(ctx, &store.UpstreamOAuth{UpstreamID: u.ID, ClientID: "dyn-client", AuthURL: up.URL + "/authorize", TokenURL: up.URL + "/token", Resource: up.URL + "/mcp"})
+	up.mu.Lock()
+	up.access = "access-9"
+	up.mu.Unlock()
+
+	// stats shows the MCP as needing a login, with a link.
+	cs := connect(t, e.ts.URL+"/mcp", newToken(t, e, nil))
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__stats"})
+	if err != nil || res.IsError {
+		t.Fatalf("stats: %v %+v", err, res)
+	}
+	per := res.StructuredContent.(map[string]any)["per_mcp"].([]any)[0].(map[string]any)
+	if per["status"] != "needs_auth" || !strings.HasPrefix(per["login_url"].(string), up.URL+"/authorize") {
+		t.Fatalf("stats entry = %v", per)
+	}
+
+	// When a tool call fails because the login is gone, the error handed to the agent carries the link.
+	msg := e.srv.reauthMessage(ctx, &principal{user: e.user}, u, errors.New(`calling "tools/call": Unauthorized (401)`))
+	if !strings.Contains(msg, up.URL+"/authorize") || !strings.Contains(msg, "try this call again") {
+		t.Fatalf("reauth message = %q", msg)
+	}
+	// Other users' MCPs and non-auth errors get no link.
+	other := &store.User{ID: "someone-else"}
+	if m := e.srv.reauthMessage(ctx, &principal{user: other}, u, errors.New("401")); m != "" {
+		t.Fatalf("leaked link to non-owner: %q", m)
+	}
+	if m := e.srv.reauthMessage(ctx, &principal{user: e.user}, u, errors.New("boom")); m != "" {
+		t.Fatalf("link for non-auth error: %q", m)
 	}
 }

@@ -184,7 +184,7 @@ func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
 			slug = slug + "-" + us.up.ID[:4]
 		}
 		usedSlug[slug] = true
-		s.addUpstream(srv, slug, us, usedName)
+		s.addUpstream(srv, p, slug, us, usedName)
 	}
 	return srv
 }
@@ -252,7 +252,7 @@ func gwName(slug, name string) string {
 	return n
 }
 
-func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, used map[string]bool) {
+func (s *Server) addUpstream(srv *mcp.Server, p *principal, slug string, us *upstreamSnap, used map[string]bool) {
 	up := us.up
 	label := up.DisplayLabel()
 	for _, t := range us.snap.Tools {

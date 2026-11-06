@@ -12,6 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/store"
+	"github.com/matthiaslubbertsen/mcp-full-of-mcps/internal/upstream"
 )
 
 // reservedSlug is the tool prefix of the gateway's own tools (agora__add_mcp,
@@ -62,6 +63,28 @@ func detached(parent context.Context) context.Context {
 	stop := context.AfterFunc(parent, cancel)
 	go func() { <-ctx.Done(); stop() }()
 	return ctx
+}
+
+// loginLink starts the upstream OAuth flow and returns the URL the user must open.
+func (s *Server) loginLink(ctx context.Context, u *store.Upstream) (string, error) {
+	return s.up.StartOAuth(detached(ctx), u, s.cfg.BaseURL+"/oauth/upstream/callback", "", "")
+}
+
+// reauthMessage turns an "unauthenticated" failure of one of the caller's own
+// OAuth MCPs into an instruction for the agent, carrying a fresh login link.
+// It returns "" for any other failure.
+func (s *Server) reauthMessage(ctx context.Context, p *principal, u *store.Upstream, callErr error) string {
+	if p.user == nil || u.UserID != p.user.ID || u.AuthType != "oauth" || !upstream.IsAuthErr(callErr) {
+		return ""
+	}
+	link, err := s.loginLink(ctx, u)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%s isn't logged in (the login expired or was never completed), so this call did not run. "+
+		"Give this link to the user so they can log in again: %s\n"+
+		"The link works once and expires in 10 minutes; they need to be signed in to Agora in that browser. "+
+		"Ask them to tell you when they're done, then try this call again.", u.Name, link)
 }
 
 // ---- agora__add_mcp ----
@@ -132,7 +155,7 @@ func (s *Server) addMCP(ctx context.Context, p *principal, in addMCPIn) (addMCPO
 		out.Next = "Refresh the tool list in your client to see " + u.Slug + "__* tools."
 	case u.AuthType == "oauth":
 		out.Status, out.Error = "needs_auth", ""
-		link, err := s.up.StartOAuth(ctx, u, s.cfg.BaseURL+"/oauth/upstream/callback", "", "")
+		link, err := s.loginLink(ctx, u)
 		if err != nil {
 			out.Error = err.Error()
 			out.Next = "The MCP was saved but automatic login setup failed. The user can finish on " + s.cfg.BaseURL + "/mcps (press Connect, entering a client ID and secret if asked)."
@@ -163,6 +186,7 @@ type mcpStat struct {
 	Public       bool     `json:"public"`
 	Status       string   `json:"status" jsonschema:"ok, needs_auth, unreachable or disabled"`
 	Error        string   `json:"error,omitempty"`
+	LoginURL     string   `json:"login_url,omitempty" jsonschema:"for your own MCP with status needs_auth: give this link to the user so they can log in again"`
 	Tools        int      `json:"tools"`
 	Prompts      int      `json:"prompts"`
 	Resources    int      `json:"resources"`
@@ -250,6 +274,11 @@ func (s *Server) stats(ctx context.Context, p *principal) statsOut {
 				if st.NeedsAuth {
 					ms.Status = "needs_auth"
 				}
+			}
+		}
+		if ms.Status == "needs_auth" && ms.Mine && u.AuthType == "oauth" {
+			if link, err := s.loginLink(ctx, u); err == nil {
+				ms.LoginURL = link
 			}
 		}
 		if ms.Mine && ms.Error != "" {
