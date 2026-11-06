@@ -35,6 +35,17 @@ One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mo
 
 The gateway is a full OAuth 2.1 authorization server for MCP clients: protected-resource and authorization-server metadata, dynamic client registration, authorization code + PKCE (S256), and rotating refresh tokens. The user approves on a consent screen after logging in to the website.
 
+## Agora's own tools
+
+Besides your MCPs' tools, the gateway exposes two of its own under the reserved prefix `agora__` (so `agora` can't be used as an MCP's short name):
+
+| Tool | What it does |
+| --- | --- |
+| `agora__add_mcp` | Adds a remote MCP (name, URL, optional slug/label/transport/auth). Tests the connection and reports `connected`, `needs_auth` or `unreachable`. For OAuth MCPs you still press **Connect** on the MCPs page. |
+| `agora__stats` | Per-MCP health, tool/prompt/resource counts and a rough token estimate of the tool definitions, plus totals. Useful for seeing which MCPs are expensive to load. |
+
+Anonymous (`/mcp/public`) callers get neither. A bearer token limited to specific MCPs gets `agora__stats` only, because adding an MCP would go outside its scope. API keys passed to `add_mcp` travel through the model, so prefer the website for sensitive credentials.
+
 ## Quick start
 
 You need an OIDC provider that can issue a client ID and secret for this app. Register this redirect URI with it: `BASE_URL/auth/callback/<provider-id>`.

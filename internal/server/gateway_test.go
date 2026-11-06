@@ -104,7 +104,24 @@ func connect(t *testing.T, url, tok string) *mcp.ClientSession {
 	return cs
 }
 
+// toolNames lists the MCP tools a client sees, leaving out the gateway's own
+// agora__ tools (they have their own tests).
 func toolNames(t *testing.T, cs *mcp.ClientSession) []string {
+	t.Helper()
+	var out []string
+	for tool, err := range cs.Tools(context.Background(), nil) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasPrefix(tool.Name, "agora__") {
+			continue
+		}
+		out = append(out, tool.Name)
+	}
+	return out
+}
+
+func allToolNames(t *testing.T, cs *mcp.ClientSession) []string {
 	t.Helper()
 	var out []string
 	for tool, err := range cs.Tools(context.Background(), nil) {
@@ -374,5 +391,85 @@ func TestToolsCarryFriendlyLabel(t *testing.T) {
 	}
 	if tl := got["rc__batch_edit"]; tl == nil || tl.Title != "Batch Edit (rc)" {
 		t.Fatalf("slug-labelled tool = %+v", tl)
+	}
+}
+
+func newToken(t *testing.T, e *env, scope []string) string {
+	t.Helper()
+	tok := "mcpt_" + crypto.RandToken(16)
+	if err := e.st.CreateAPIToken(context.Background(), &store.APIToken{UserID: e.user.ID, Name: "t", Prefix: tok[:10], UpstreamIDs: scope}, tok); err != nil {
+		t.Fatal(err)
+	}
+	return tok
+}
+
+func TestAgoraAddMCPAndStats(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	cs := connect(t, e.ts.URL+"/mcp", newToken(t, e, nil))
+	names := strings.Join(allToolNames(t, cs), ",")
+	if !strings.Contains(names, "agora__add_mcp") || !strings.Contains(names, "agora__stats") {
+		t.Fatalf("tools = %s", names)
+	}
+
+	up := mockUpstream(t, "echo")
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__add_mcp", Arguments: map[string]any{"name": "Mock One", "url": up.URL}})
+	if err != nil || res.IsError {
+		t.Fatalf("add: %v %+v", err, res)
+	}
+	out := res.StructuredContent.(map[string]any)
+	if out["slug"] != "mock-one" || out["status"] != "connected" || out["tools"].(float64) != 1 {
+		t.Fatalf("add result = %v", out)
+	}
+	if ups, _ := e.st.ListUpstreams(ctx, e.user.ID); len(ups) != 1 {
+		t.Fatalf("want 1 upstream, got %d", len(ups))
+	}
+	// The new MCP's tools are visible on a fresh connection.
+	if n := strings.Join(toolNames(t, connect(t, e.ts.URL+"/mcp", newToken(t, e, nil))), ","); !strings.Contains(n, "mock-one__echo") {
+		t.Fatalf("tools after add = %s", n)
+	}
+
+	// Duplicate, reserved and invalid input come back as tool errors.
+	for _, args := range []map[string]any{
+		{"name": "Mock One", "url": up.URL},
+		{"name": "x", "slug": "agora", "url": up.URL},
+		{"name": "x", "url": "ftp://nope"},
+		{"name": "k", "url": up.URL, "auth_type": "header"},
+	} {
+		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__add_mcp", Arguments: args})
+		if err != nil || !res.IsError {
+			t.Fatalf("args %v: expected tool error, got %v %+v", args, err, res)
+		}
+	}
+
+	// An unreachable MCP is saved and reported.
+	res, _ = cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__add_mcp", Arguments: map[string]any{"name": "Dead", "url": "http://127.0.0.1:1/mcp"}})
+	if res.IsError || res.StructuredContent.(map[string]any)["status"] != "unreachable" {
+		t.Fatalf("dead add = %+v", res)
+	}
+
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "agora__stats"})
+	if err != nil || res.IsError {
+		t.Fatalf("stats: %v %+v", err, res)
+	}
+	st := res.StructuredContent.(map[string]any)
+	if st["mcps"].(float64) != 2 || st["healthy"].(float64) != 1 || st["tools"].(float64) != 1 || st["estimated_tool_tokens"].(float64) <= 0 {
+		t.Fatalf("stats = %v", st)
+	}
+}
+
+func TestAgoraToolsRespectScopeAndAnonymous(t *testing.T) {
+	e := newEnv(t)
+	up := e.addUpstream(t, "alpha", mockUpstream(t, "echo").URL, false)
+
+	n := strings.Join(allToolNames(t, connect(t, e.ts.URL+"/mcp", newToken(t, e, []string{up.ID}))), ",")
+	if !strings.Contains(n, "agora__stats") || strings.Contains(n, "agora__add_mcp") {
+		t.Fatalf("scoped token tools = %s", n)
+	}
+
+	e.addUpstream(t, "shared", mockUpstream(t, "echo").URL, true)
+	e.st.SetSetting(context.Background(), settingAllowAnonymous, "true")
+	if n := strings.Join(allToolNames(t, connect(t, e.ts.URL+"/mcp/public", "")), ","); strings.Contains(n, "agora__") {
+		t.Fatalf("anonymous tools = %s", n)
 	}
 }

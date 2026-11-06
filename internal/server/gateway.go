@@ -170,8 +170,28 @@ func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
 	})
 	ups := s.principalUpstreams(ctx, p)
 
-	// Fetch every upstream's catalogue in parallel, bounded so one slow server
-	// can't hold up the rest.
+	snaps := s.fetchSnaps(ctx, ups)
+
+	usedSlug := map[string]bool{reservedSlug: true}
+	usedName := map[string]bool{}
+	s.addAgoraTools(srv, p, usedName)
+	for _, us := range snaps {
+		if us == nil {
+			continue
+		}
+		slug := us.up.Slug
+		if usedSlug[slug] { // someone else's public MCP with the same short name: stable suffix
+			slug = slug + "-" + us.up.ID[:4]
+		}
+		usedSlug[slug] = true
+		s.addUpstream(srv, slug, us, usedName)
+	}
+	return srv
+}
+
+// fetchSnaps fetches every upstream's catalogue in parallel, bounded so one
+// slow server can't hold up the rest. Unreachable upstreams yield a nil entry.
+func (s *Server) fetchSnaps(ctx context.Context, ups []*store.Upstream) []*upstreamSnap {
 	fctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	snaps := make([]*upstreamSnap, len(ups))
@@ -191,21 +211,7 @@ func (s *Server) buildServer(ctx context.Context, p *principal) *mcp.Server {
 		}()
 	}
 	wg.Wait()
-
-	usedSlug := map[string]bool{}
-	usedName := map[string]bool{}
-	for _, us := range snaps {
-		if us == nil {
-			continue
-		}
-		slug := us.up.Slug
-		if usedSlug[slug] { // someone else's public MCP with the same short name: stable suffix
-			slug = slug + "-" + us.up.ID[:4]
-		}
-		usedSlug[slug] = true
-		s.addUpstream(srv, slug, us, usedName)
-	}
-	return srv
+	return snaps
 }
 
 type upstreamSnap struct {
