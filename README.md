@@ -35,6 +35,18 @@ One MCP endpoint that fronts many MCP servers. Add remote MCPs once in a dark-mo
 
 The gateway is a full OAuth 2.1 authorization server for MCP clients: protected-resource and authorization-server metadata, dynamic client registration, authorization code + PKCE (S256), and rotating refresh tokens. The user approves on a consent screen after logging in to the website.
 
+## Agora's own tools
+
+Besides your MCPs' tools, the gateway exposes three of its own under the reserved prefix `agora__` (so `agora` can't be used as an MCP's short name):
+
+| Tool | What it does |
+| --- | --- |
+| `agora__info` | Explains the idea: what Agora is, how tools are named, what the `agora__` tools do and how logins work. |
+| `agora__add_mcp` | Adds a remote MCP (name, URL, optional slug/label/transport/auth). Tests the connection and reports `connected`, `needs_auth` or `unreachable`. If the MCP needs a login (you asked for `oauth`, or it answered 401 and no auth was given, in which case it is switched to OAuth) the result carries a `login_url`; the agent hands it to you, you open it in a browser where you're signed in to Agora, and the MCP connects when you approve. The link works once and lasts 10 minutes. |
+| `agora__stats` | Per-MCP health, tool/prompt/resource counts and totals, plus a login link for any of your MCPs that need one. |
+
+If one of your OAuth MCPs loses its login, a tool call to it returns an error telling the agent to give you a fresh login link and retry once you're done, and `agora__stats` lists the link next to that MCP. Anonymous (`/mcp/public`) callers get neither. A bearer token limited to specific MCPs gets `agora__info` and `agora__stats` only, because adding an MCP would go outside its scope. API keys passed to `add_mcp` travel through the model, so prefer the website for sensitive credentials.
+
 ## Quick start
 
 You need an OIDC provider that can issue a client ID and secret for this app. Register this redirect URI with it: `BASE_URL/auth/callback/<provider-id>`.

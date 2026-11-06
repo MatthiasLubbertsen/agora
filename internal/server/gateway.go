@@ -201,7 +201,7 @@ func errResult(msg string) *mcp.CallToolResult {
 // of the caller's upstreams, each prefixed with the upstream's short name.
 func (s *Server) buildServer(ctx context.Context, p *principal) (*mcp.Server, catalog) {
 	srv := mcp.NewServer(&mcp.Implementation{Name: "agora", Version: "1.0.0"}, &mcp.ServerOptions{
-		Instructions: "This server merges several MCP servers. Every tool and prompt name starts with the name of the MCP it comes from, followed by two underscores.",
+		Instructions: agoraInstructions(p),
 		// What a caller sees depends on who they are, so no shared cache may keep it.
 		SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs, c.CacheScope = 0, "private" },
 		// Advertise list-changed even when the caller has no MCPs yet, so the first
@@ -222,9 +222,29 @@ type catalog struct{ tools, prompts, resources []string }
 // see. Registering a name that already exists replaces it.
 func (s *Server) fill(ctx context.Context, srv *mcp.Server, p *principal) catalog {
 	ups := s.principalUpstreams(ctx, p)
+	snaps := s.fetchSnaps(ctx, ups)
 
-	// Fetch every upstream's catalogue in parallel, bounded so one slow server
-	// can't hold up the rest.
+	var cat catalog
+	usedSlug := map[string]bool{reservedSlug: true}
+	usedName := map[string]bool{}
+	s.addAgoraTools(srv, p, usedName)
+	for _, us := range snaps {
+		if us == nil {
+			continue
+		}
+		slug := us.up.Slug
+		if usedSlug[slug] { // someone else's public MCP with the same short name: stable suffix
+			slug = slug + "-" + us.up.ID[:4]
+		}
+		usedSlug[slug] = true
+		s.addUpstream(srv, p, slug, us, usedName, &cat)
+	}
+	return cat
+}
+
+// fetchSnaps fetches every upstream's catalogue in parallel, bounded so one
+// slow server can't hold up the rest. Unreachable upstreams yield a nil entry.
+func (s *Server) fetchSnaps(ctx context.Context, ups []*store.Upstream) []*upstreamSnap {
 	fctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	snaps := make([]*upstreamSnap, len(ups))
@@ -244,22 +264,7 @@ func (s *Server) fill(ctx context.Context, srv *mcp.Server, p *principal) catalo
 		}()
 	}
 	wg.Wait()
-
-	var cat catalog
-	usedSlug := map[string]bool{}
-	usedName := map[string]bool{}
-	for _, us := range snaps {
-		if us == nil {
-			continue
-		}
-		slug := us.up.Slug
-		if usedSlug[slug] { // someone else's public MCP with the same short name: stable suffix
-			slug = slug + "-" + us.up.ID[:4]
-		}
-		usedSlug[slug] = true
-		s.addUpstream(srv, slug, us, usedName, &cat)
-	}
-	return cat
+	return snaps
 }
 
 type upstreamSnap struct {
@@ -300,7 +305,7 @@ func gwName(slug, name string) string {
 	return n
 }
 
-func (s *Server) addUpstream(srv *mcp.Server, slug string, us *upstreamSnap, used map[string]bool, cat *catalog) {
+func (s *Server) addUpstream(srv *mcp.Server, p *principal, slug string, us *upstreamSnap, used map[string]bool, cat *catalog) {
 	up := us.up
 	label := up.DisplayLabel()
 	for _, t := range us.snap.Tools {

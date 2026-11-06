@@ -124,6 +124,9 @@ func apply(u *store.Upstream, in *upstreamInput) string {
 	if !slugRe.MatchString(u.Slug) {
 		return "The short name can only use a-z, 0-9 and dashes (max 32). It becomes the tool prefix, e.g. " + u.Slug + "__search."
 	}
+	if u.Slug == reservedSlug {
+		return "The short name \"" + reservedSlug + "\" is reserved for the gateway's own tools."
+	}
 	if utf8.RuneCountInString(u.Label) > 16 || strings.ContainsAny(u.Label, "\r\n\t") {
 		return "The label can be up to 16 characters, like Exa or rc."
 	}

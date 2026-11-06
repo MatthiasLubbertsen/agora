@@ -234,6 +234,9 @@ func (m *Manager) session(ctx context.Context, up *store.Upstream, e *entry) (*m
 	return s, nil
 }
 
+// IsAuthErr reports whether an upstream error means the login is missing or expired.
+func IsAuthErr(err error) bool { return isAuthErr(err) }
+
 func isAuthErr(err error) bool {
 	if err == nil {
 		return false
