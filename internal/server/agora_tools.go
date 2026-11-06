@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -60,7 +59,7 @@ func (s *Server) addAgoraTools(srv *mcp.Server, p *principal, used map[string]bo
 		Name:  reservedSlug + "__stats",
 		Title: "Stats (Agora)",
 		Description: "(Agora) Show how this gateway is doing: every MCP you can use with its health, " +
-			"tool/prompt/resource counts and an estimate of how many tokens its tool definitions cost a client.",
+			"tool/prompt/resource counts and a login link for any of your MCPs that need one.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ statsIn) (*mcp.CallToolResult, statsOut, error) {
 		return nil, s.stats(detached(ctx), p), nil
@@ -136,7 +135,7 @@ func (s *Server) info(p *principal) infoOut {
 		Naming: "Every tool and prompt is named <short_name>__<tool>, where short_name is the MCP's slug, e.g. exa__search. Titles and descriptions are tagged with the MCP's label, e.g. \"Search (Exa)\".",
 		Tools: []string{
 			"agora__info: this overview.",
-			"agora__stats: health, tool/prompt/resource counts and an estimated token cost for each MCP.",
+			"agora__stats: health, tool/prompt/resource counts for each MCP, and login links for MCPs that need one.",
 		},
 		Login: "Some MCPs need the user to log in. When agora__stats shows status needs_auth, or a tool call says the MCP isn't logged in, there is a login_url. " +
 			"Give it to the user, have them open it in a browser where they are signed in to Agora, and ask them to tell you when they're done; then try again. " +
@@ -242,40 +241,28 @@ func (s *Server) addMCP(ctx context.Context, p *principal, in addMCPIn) (addMCPO
 type statsIn struct{}
 
 type mcpStat struct {
-	Slug         string   `json:"slug"`
-	Name         string   `json:"name"`
-	Mine         bool     `json:"mine" jsonschema:"false for another user's public MCP"`
-	Enabled      bool     `json:"enabled"`
-	Public       bool     `json:"public"`
-	Status       string   `json:"status" jsonschema:"ok, needs_auth, unreachable or disabled"`
-	Error        string   `json:"error,omitempty"`
-	LoginURL     string   `json:"login_url,omitempty" jsonschema:"for your own MCP with status needs_auth: give this link to the user so they can log in again"`
-	Tools        int      `json:"tools"`
-	Prompts      int      `json:"prompts"`
-	Resources    int      `json:"resources"`
-	ToolTokens   int      `json:"estimated_tool_tokens" jsonschema:"rough size of this MCP's tool definitions in tokens"`
-	LargestTools []string `json:"largest_tools,omitempty"`
+	Slug      string `json:"slug"`
+	Name      string `json:"name"`
+	Mine      bool   `json:"mine" jsonschema:"false for another user's public MCP"`
+	Enabled   bool   `json:"enabled"`
+	Public    bool   `json:"public"`
+	Status    string `json:"status" jsonschema:"ok, needs_auth, unreachable or disabled"`
+	Error     string `json:"error,omitempty"`
+	LoginURL  string `json:"login_url,omitempty" jsonschema:"for your own MCP with status needs_auth: give this link to the user so they can log in again"`
+	Tools     int    `json:"tools"`
+	Prompts   int    `json:"prompts"`
+	Resources int    `json:"resources"`
 }
 
 type statsOut struct {
-	MCPs       int       `json:"mcps"`
-	Healthy    int       `json:"healthy"`
-	Tools      int       `json:"tools"`
-	Prompts    int       `json:"prompts"`
-	Resources  int       `json:"resources"`
-	ToolTokens int       `json:"estimated_tool_tokens" jsonschema:"rough tokens a client spends just loading every tool definition"`
-	APITokens  int       `json:"api_tokens"`
-	AppGrants  int       `json:"signed_in_apps"`
-	PerMCP     []mcpStat `json:"per_mcp"`
-}
-
-// estimateTokens is a cheap size guess: about four bytes of JSON per token.
-func estimateTokens(v any) int {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return 0
-	}
-	return (len(b) + 3) / 4
+	MCPs      int       `json:"mcps"`
+	Healthy   int       `json:"healthy"`
+	Tools     int       `json:"tools"`
+	Prompts   int       `json:"prompts"`
+	Resources int       `json:"resources"`
+	APITokens int       `json:"api_tokens"`
+	AppGrants int       `json:"signed_in_apps"`
+	PerMCP    []mcpStat `json:"per_mcp"`
 }
 
 func (s *Server) stats(ctx context.Context, p *principal) statsOut {
@@ -316,20 +303,6 @@ func (s *Server) stats(ctx context.Context, p *principal) statsOut {
 		case us != nil:
 			ms.Status = "ok"
 			ms.Tools, ms.Prompts, ms.Resources = len(us.snap.Tools), len(us.snap.Prompts), len(us.snap.Resources)
-			type sized struct {
-				name string
-				n    int
-			}
-			var sizes []sized
-			for _, t := range us.snap.Tools {
-				n := estimateTokens(t)
-				ms.ToolTokens += n
-				sizes = append(sizes, sized{t.Name, n})
-			}
-			sort.Slice(sizes, func(i, j int) bool { return sizes[i].n > sizes[j].n })
-			for i := 0; i < len(sizes) && i < 3; i++ {
-				ms.LargestTools = append(ms.LargestTools, fmt.Sprintf("%s (~%d tokens)", sizes[i].name, sizes[i].n))
-			}
 		default:
 			ms.Status = "unreachable"
 			if st, ok := s.up.GetStatus(u.ID); ok {
@@ -356,10 +329,9 @@ func (s *Server) stats(ctx context.Context, p *principal) statsOut {
 		out.Tools += ms.Tools
 		out.Prompts += ms.Prompts
 		out.Resources += ms.Resources
-		out.ToolTokens += ms.ToolTokens
 		out.PerMCP = append(out.PerMCP, ms)
 	}
-	sort.Slice(out.PerMCP, func(i, j int) bool { return out.PerMCP[i].ToolTokens > out.PerMCP[j].ToolTokens })
+	sort.Slice(out.PerMCP, func(i, j int) bool { return out.PerMCP[i].Slug < out.PerMCP[j].Slug })
 	if ts, err := s.st.ListAPITokens(ctx, p.user.ID); err == nil {
 		out.APITokens = len(ts)
 	}

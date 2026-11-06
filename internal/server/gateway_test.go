@@ -455,7 +455,7 @@ func TestAgoraAddMCPAndStats(t *testing.T) {
 		t.Fatalf("stats: %v %+v", err, res)
 	}
 	st := res.StructuredContent.(map[string]any)
-	if st["mcps"].(float64) != 2 || st["healthy"].(float64) != 1 || st["tools"].(float64) != 1 || st["estimated_tool_tokens"].(float64) <= 0 {
+	if st["mcps"].(float64) != 2 || st["healthy"].(float64) != 1 || st["tools"].(float64) != 1 {
 		t.Fatalf("stats = %v", st)
 	}
 }
