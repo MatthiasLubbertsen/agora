@@ -89,7 +89,7 @@ Admin-only switches live in the UI under **Settings**: *open sign-up* (off by de
 
 ## Limits to know about
 
-- Gateway ↔ client is **stateless**: tool lists are fetched per request (each upstream's catalogue is cached for 60 s). Upstream-initiated requests (sampling, elicitation, progress, list-changed notifications) are not forwarded.
+- Gateway ↔ client uses **stateful sessions** with a server-to-client stream: when an MCP is added, removed, enabled, disabled or edited, connected clients get `notifications/tools/list_changed` (and prompts/resources equivalents), so new tools appear without a restart if the client honours it. Each upstream's catalogue is cached for 60 s. Upstream-initiated requests (sampling, elicitation, progress, list-changed notifications) are not forwarded.
 - Resource *templates* are not forwarded; concrete resources, tools and prompts are.
 - Upstream OAuth refresh does not send the RFC 8707 `resource` parameter (the initial authorization does).
 - SQLite means one instance. Run a single replica.
