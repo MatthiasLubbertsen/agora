@@ -596,3 +596,26 @@ func TestSessionBelongsToItsOpener(t *testing.T) {
 		t.Fatalf("status %d, want 403", resp.StatusCode)
 	}
 }
+
+func TestUpstreamInstructionsAreForwarded(t *testing.T) {
+	e := newEnv(t)
+	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		s := mcp.NewServer(&mcp.Implementation{Name: "mock", Version: "1"}, &mcp.ServerOptions{Instructions: "Read the memory files first."})
+		mcp.AddTool(s, &mcp.Tool{Name: "echo", Description: "echo"}, func(ctx context.Context, _ *mcp.CallToolRequest, in echoIn) (*mcp.CallToolResult, any, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: in.Text}}}, nil, nil
+		})
+		return s
+	}, &mcp.StreamableHTTPOptions{DisableLocalhostProtection: true})
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	e.addUpstream(t, "alpha", ts.URL, false)
+	e.addUpstream(t, "beta", mockUpstream(t, "echo").URL, false) // no instructions
+
+	ins := connect(t, e.ts.URL+"/mcp", newToken(t, e, nil)).InitializeResult().Instructions
+	if !strings.Contains(ins, "Agora is one MCP endpoint") || !strings.Contains(ins, "alpha__") || !strings.Contains(ins, "Read the memory files first.") {
+		t.Fatalf("instructions = %q", ins)
+	}
+	if strings.Contains(ins, "beta__") {
+		t.Fatalf("upstream without instructions got a section: %q", ins)
+	}
+}
