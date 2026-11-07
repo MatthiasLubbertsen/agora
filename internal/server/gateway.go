@@ -200,8 +200,9 @@ func errResult(msg string) *mcp.CallToolResult {
 // buildServer assembles an MCP server exposing every tool, prompt and resource
 // of the caller's upstreams, each prefixed with the upstream's short name.
 func (s *Server) buildServer(ctx context.Context, p *principal) (*mcp.Server, catalog) {
+	snaps := s.fetchSnaps(ctx, s.principalUpstreams(ctx, p))
 	srv := mcp.NewServer(&mcp.Implementation{Name: "agora", Version: "1.0.0"}, &mcp.ServerOptions{
-		Instructions: agoraInstructions(p),
+		Instructions: combinedInstructions(p, snaps),
 		// What a caller sees depends on who they are, so no shared cache may keep it.
 		SetCacheable: func(_ context.Context, _ mcp.Request, c *mcp.Cacheable) { c.TTLMs, c.CacheScope = 0, "private" },
 		// Advertise list-changed even when the caller has no MCPs yet, so the first
@@ -212,7 +213,7 @@ func (s *Server) buildServer(ctx context.Context, p *principal) (*mcp.Server, ca
 			Resources: &mcp.ResourceCapabilities{ListChanged: true},
 		},
 	})
-	return srv, s.fill(ctx, srv, p)
+	return srv, s.fillSnaps(srv, p, snaps)
 }
 
 // catalog records what fill registered, so a refresh can drop what's gone.
@@ -221,14 +222,28 @@ type catalog struct{ tools, prompts, resources []string }
 // fill (re)registers every tool, prompt and resource the caller can currently
 // see. Registering a name that already exists replaces it.
 func (s *Server) fill(ctx context.Context, srv *mcp.Server, p *principal) catalog {
-	ups := s.principalUpstreams(ctx, p)
-	snaps := s.fetchSnaps(ctx, ups)
+	return s.fillSnaps(srv, p, s.fetchSnaps(ctx, s.principalUpstreams(ctx, p)))
+}
 
+func (s *Server) fillSnaps(srv *mcp.Server, p *principal, snaps []*upstreamSnap) catalog {
 	var cat catalog
-	usedSlug := map[string]bool{reservedSlug: true}
 	usedName := map[string]bool{}
 	s.addAgoraTools(srv, p, usedName)
-	for _, us := range snaps {
+	slugs := snapSlugs(snaps)
+	for i, us := range snaps {
+		if us == nil {
+			continue
+		}
+		s.addUpstream(srv, p, slugs[i], us, usedName, &cat)
+	}
+	return cat
+}
+
+// snapSlugs returns the tool prefix of each snapshot (nil entries get "").
+func snapSlugs(snaps []*upstreamSnap) []string {
+	out := make([]string, len(snaps))
+	usedSlug := map[string]bool{reservedSlug: true}
+	for i, us := range snaps {
 		if us == nil {
 			continue
 		}
@@ -237,9 +252,28 @@ func (s *Server) fill(ctx context.Context, srv *mcp.Server, p *principal) catalo
 			slug = slug + "-" + us.up.ID[:4]
 		}
 		usedSlug[slug] = true
-		s.addUpstream(srv, p, slug, us, usedName, &cat)
+		out[i] = slug
 	}
-	return cat
+	return out
+}
+
+// combinedInstructions is Agora's own text followed by each upstream's
+// initialize-time instructions, each under a heading naming the MCP and its
+// tool prefix so the model knows which tools the guidance applies to.
+func combinedInstructions(p *principal, snaps []*upstreamSnap) string {
+	b := agoraInstructions(p)
+	slugs := snapSlugs(snaps)
+	for i, us := range snaps {
+		if us == nil {
+			continue
+		}
+		ins := strings.TrimSpace(us.snap.Instructions)
+		if ins == "" {
+			continue
+		}
+		b += "\n\n## " + us.up.DisplayLabel() + " (tools prefixed " + slugs[i] + "__)\n\n" + ins
+	}
+	return b
 }
 
 // fetchSnaps fetches every upstream's catalogue in parallel, bounded so one

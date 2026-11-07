@@ -23,7 +23,9 @@ type Snapshot struct {
 	Tools     []*mcp.Tool
 	Prompts   []*mcp.Prompt
 	Resources []*mcp.Resource
-	Fetched   time.Time
+	// Instructions is the upstream's own `instructions` text from its initialize response.
+	Instructions string
+	Fetched      time.Time
 }
 
 // Status is the health of an upstream as last observed.
@@ -281,7 +283,12 @@ func (m *Manager) refresh(ctx context.Context, up *store.Upstream, e *entry) (*S
 
 func listAll(ctx context.Context, s *mcp.ClientSession) (*Snapshot, error) {
 	snap := &Snapshot{}
-	caps := s.InitializeResult().Capabilities
+	init := s.InitializeResult()
+	if init == nil {
+		return snap, nil
+	}
+	snap.Instructions = init.Instructions
+	caps := init.Capabilities
 	if caps != nil && caps.Tools != nil {
 		for t, err := range s.Tools(ctx, nil) {
 			if err != nil {
