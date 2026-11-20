@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { EmptyState, PageHeader, Skeleton, FormField, LoadingButton } from "@/components/ui/misc";
 import { Switch } from "@/components/ui/switch";
@@ -241,7 +241,7 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
   const [label, setLabel] = useState(initial?.label ?? "");
   const [url, setUrl] = useState(initial?.url ?? "");
   const [transport, setTransport] = useState(initial?.transport ?? "http");
-  const [authType, setAuthType] = useState(initial?.auth_type ?? "none");
+  const [authType, setAuthType] = useState<Upstream["auth_type"]>(initial?.auth_type ?? "oauth");
   const [headerName, setHeaderName] = useState(initial?.header_name ?? "");
   const [secret, setSecret] = useState("");
   const [isPublic, setIsPublic] = useState(initial?.is_public ?? false);
@@ -289,17 +289,23 @@ function UpstreamForm({ initial, onClose, onSaved }: { initial: Upstream | null;
             </FormField>
           </div>
           <FormField label="Transport">
-            <NativeSelect value={transport} onChange={(e) => setTransport(e.target.value as "http" | "sse")}>
-              <option value="http">Streamable HTTP</option>
-              <option value="sse">SSE (legacy)</option>
-            </NativeSelect>
+            <Select value={transport} onValueChange={(v) => setTransport(v as "http" | "sse")}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="http">Streamable HTTP</SelectItem>
+                <SelectItem value="sse">SSE (legacy)</SelectItem>
+              </SelectContent>
+            </Select>
           </FormField>
           <FormField label="Authentication">
-            <NativeSelect value={authType} onChange={(e) => setAuthType(e.target.value as Upstream["auth_type"])}>
-              <option value="none">None</option>
-              <option value="header">API key / bearer token</option>
-              <option value="oauth">OAuth (log in to it)</option>
-            </NativeSelect>
+            <Select value={authType} onValueChange={(v) => setAuthType(v as Upstream["auth_type"])}>
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="oauth">OAuth (log in to it)</SelectItem>
+                <SelectItem value="header">API key / bearer token</SelectItem>
+                <SelectItem value="none">None</SelectItem>
+              </SelectContent>
+            </Select>
           </FormField>
           {authType === "header" && (
             <div className="grid gap-4 sm:grid-cols-2">
